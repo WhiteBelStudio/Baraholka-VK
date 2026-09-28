@@ -37,4 +37,4 @@ The service refuses to start when required settings are missing or invalid. `VK_
 
 ## Current stage
 
-Stage 5 (user management) is complete. Users are created or updated from VK `message_new` events, their VK identity is stored in SQLite, and blocked users are denied marketplace access. The next development stage is listing management.
+Stage 6 (listing system) is complete. The project now has a complete listing data layer and service layer: drafts, ownership checks, CRUD operations, statuses, validation, photos, moderation submission, user listing queries, moderation queue queries, and safe owner-only deletion. The next development stage is the listing creation dialog.
