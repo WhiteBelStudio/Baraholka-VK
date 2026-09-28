@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import aiosqlite
 
@@ -52,9 +53,33 @@ CREATE TABLE IF NOT EXISTS moderation_logs (
 """
 
 
-async def init_db() -> None:
+async def get_db() -> aiosqlite.Connection:
     settings.database_file.parent.mkdir(parents=True, exist_ok=True)
+    db = await aiosqlite.connect(settings.database_file)
+    db.row_factory = aiosqlite.Row
+    await db.execute("PRAGMA foreign_keys = ON")
+    return db
 
-    async with aiosqlite.connect(settings.database_file) as db:
+
+async def init_db() -> None:
+    async with await get_db() as db:
         await db.executescript(SCHEMA)
         await db.commit()
+
+
+async def execute(query: str, parameters: tuple[Any, ...] = ()) -> None:
+    async with await get_db() as db:
+        await db.execute(query, parameters)
+        await db.commit()
+
+
+async def fetch_one(query: str, parameters: tuple[Any, ...] = ()) -> aiosqlite.Row | None:
+    async with await get_db() as db:
+        cursor = await db.execute(query, parameters)
+        return await cursor.fetchone()
+
+
+async def fetch_all(query: str, parameters: tuple[Any, ...] = ()) -> list[aiosqlite.Row]:
+    async with await get_db() as db:
+        cursor = await db.execute(query, parameters)
+        return await cursor.fetchall()
