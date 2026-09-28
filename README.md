@@ -37,4 +37,4 @@ The service refuses to start when required settings are missing or invalid. `VK_
 
 ## Current stage
 
-Stage 6 (listing system) is complete. The project now has a complete listing data layer and service layer: drafts, ownership checks, CRUD operations, statuses, validation, photos, moderation submission, user listing queries, moderation queue queries, and safe owner-only deletion. The next development stage is the listing creation dialog.
+Stage 6 (listing system) is complete. The project now has a complete listing data layer and service layer: drafts, ownership checks, CRUD operations, statuses, validation, photos, moderation submission, user listing queries, moderation queue queries, and safe owner-only deletion. Stage 7 (listing creation dialog) is complete. The VK callback now provides a persistent database-backed multi-step dialog for title, manually entered category, description, price, and city, with validation, cancellation, a user keyboard, and draft resume after restart. The next development stage is the individual listing fields and validation UX.
