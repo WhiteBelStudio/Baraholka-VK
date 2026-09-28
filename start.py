@@ -1,5 +1,5 @@
-import asyncio
-from main import main
+import uvicorn
+from config import settings
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    uvicorn.run("main:app", host=settings.host, port=settings.port)
