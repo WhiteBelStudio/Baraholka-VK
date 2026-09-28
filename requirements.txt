@@ -1,6 +1,6 @@
 aiohttp>=3.10,<4
-python-dotenv>=1.0,<2
 aiosqlite>=0.20,<1
-pydantic-settings>=2.0,<3
 fastapi>=0.115,<1
+pydantic-settings>=2.0,<3
+python-dotenv>=1.0,<2
 uvicorn[standard]>=0.30,<1
