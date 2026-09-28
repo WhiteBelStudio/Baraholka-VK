@@ -70,13 +70,23 @@ async def vk_callback(request: Request) -> str:
 
         if text.lower() == START_BUTTON.lower():
             try:
-                reply, keyboard = await start_listing(int(user_id))
+                user = await create_or_update_user(
+                    int(user_id),
+                    first_name=message.get("first_name"),
+                    last_name=message.get("last_name"),
+                )
+                reply, keyboard = await start_listing(user)
                 await vk.send_message(int(user_id), reply, keyboard=keyboard)
             except Exception:
                 logger.exception("Failed to start listing dialog for user %s", user_id)
                 await vk.send_message(vk_user_id, "Не удалось начать создание объявления. Попробуйте ещё раз.")
             return "ok"
 
+        user = await create_or_update_user(
+            int(user_id),
+            first_name=message.get("first_name"),
+            last_name=message.get("last_name"),
+        )
         try:
             reply, keyboard = await handle_listing_message(user, text)
             if reply:
