@@ -6,10 +6,12 @@ from fastapi.responses import PlainTextResponse
 
 from config import settings
 from database import create_or_update_user, get_user_by_vk_id, init_db
+from handlers.listings import START_BUTTON, handle_listing_message, start_listing
+from keyboards.main import main_keyboard
 from services.vk import VKClient, VKAPIError
 
 logger = logging.getLogger(__name__)
-app = FastAPI(title="Baraholka VK", version="0.2.0")
+app = FastAPI(title="Baraholka VK", version="0.3.0")
 vk = VKClient()
 
 
@@ -56,9 +58,34 @@ async def vk_callback(request: Request) -> str:
                 await vk.send_message(int(user_id), "Ваш аккаунт заблокирован и не может использовать барахолку.")
                 return "ok"
             try:
-                await vk.send_message(int(user_id), "Привет! Барахолка VK подключена. 🛍")
+                await vk.send_message(
+                    int(user_id),
+                    "Привет! Добро пожаловать в Барахолку VK.\n\n"
+                    "Здесь можно подать объявление на модерацию.",
+                    keyboard=main_keyboard(),
+                )
             except VKAPIError:
                 logger.exception("VK API error while replying to user %s", user_id)
+            return "ok"
+
+        if text.lower() == START_BUTTON.lower():
+            try:
+                reply, keyboard = await start_listing(int(user_id))
+                await vk.send_message(int(user_id), reply, keyboard=keyboard)
+            except Exception:
+                logger.exception("Failed to start listing dialog for user %s", user_id)
+                await vk.send_message(int(user_id), "Не удалось начать создание объявления. Попробуйте ещё раз.")
+            return "ok"
+
+        try:
+            reply, keyboard = await handle_listing_message(int(user_id), text)
+            if reply:
+                await vk.send_message(int(user_id), reply, keyboard=keyboard)
+        except VKAPIError:
+            logger.exception("VK API error while processing listing for user %s", user_id)
+        except Exception:
+            logger.exception("Unexpected listing dialog error for user %s", user_id)
+            await vk.send_message(int(user_id), "Произошла ошибка. Попробуйте ещё раз.") 
 
     return "ok"
 
