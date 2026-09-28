@@ -59,7 +59,7 @@ async def vk_callback(request: Request) -> str:
                 return "ok"
             try:
                 await vk.send_message(
-                    vk_user_id,
+                    int(user_id),
                     "Привет! Добро пожаловать в Барахолку VK.\n\n"
                     "Здесь можно подать объявление на модерацию.",
                     keyboard=main_keyboard(),
@@ -75,7 +75,7 @@ async def vk_callback(request: Request) -> str:
                     first_name=message.get("first_name"),
                     last_name=message.get("last_name"),
                 )
-                reply, keyboard = await start_listing(user)
+                reply, keyboard = await start_listing(await create_or_update_user(int(user_id)))
                 await vk.send_message(int(user_id), reply, keyboard=keyboard)
             except Exception:
                 logger.exception("Failed to start listing dialog for user %s", user_id)
