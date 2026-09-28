@@ -1,4 +1,5 @@
 import asyncio
+import json
 from typing import Any
 
 import aiohttp
@@ -32,8 +33,20 @@ class VKClient:
             raise VKAPIError(f"VK API error {error.get('error_code')}: {error.get('error_msg')}")
         return data.get("response", {})
 
-    async def send_message(self, user_id: int, message: str) -> int:
-        result = await self.call("messages.send", peer_id=user_id, random_id=0, message=message)
+    async def send_message(
+        self,
+        user_id: int,
+        message: str,
+        keyboard: dict[str, Any] | None = None,
+    ) -> int:
+        params: dict[str, Any] = {
+            "peer_id": user_id,
+            "random_id": 0,
+            "message": message,
+        }
+        if keyboard:
+            params["keyboard"] = json.dumps(keyboard, ensure_ascii=False)
+        result = await self.call("messages.send", **params)
         return int(result)
 
     async def wall_post(self, message: str, attachments: str | None = None) -> int:
