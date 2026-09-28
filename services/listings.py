@@ -82,6 +82,29 @@ def validate_listing(data: ListingData) -> ListingData:
     )
 
 
+FIELD_LIMITS = {
+    "title": 120,
+    "category": 100,
+    "description": 4000,
+    "price": 50,
+    "city": 100,
+}
+
+
+def validate_field(field: str, value: str) -> str:
+    if field not in FIELD_LIMITS:
+        raise ListingValidationError(f"Unsupported listing field: {field}")
+    return _clean(value, field, FIELD_LIMITS[field])
+
+
+async def save_draft_field(listing_id: int, field: str, value: str) -> None:
+    clean_value = validate_field(field, value)
+    listing = await get_listing_or_raise(listing_id)
+    if listing["status"] != ListingStatus.DRAFT:
+        raise ListingValidationError("Only draft listings can be edited through the creation dialog")
+    await update_listing(listing_id, **{field: clean_value})
+
+
 async def create_draft(user_id: int) -> int:
     if user_id <= 0:
         raise ListingValidationError("Invalid user_id")
