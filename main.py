@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
 from config import settings
-from database import init_db
+from database import create_or_update_user, init_db
 from services.vk import VKClient, VKAPIError
 
 logger = logging.getLogger(__name__)
@@ -45,6 +45,8 @@ async def vk_callback(request: Request) -> str:
         user_id = message.get("from_id") or message.get("user_id")
         text = (message.get("text") or "").strip()
         if user_id and text.lower() in {"/start", "начать"}:
+            user = await create_or_update_user(int(user_id))
+            logger.info("Registered VK user %s as local user %s", user_id, user)
             try:
                 await vk.send_message(int(user_id), "Привет! Барахолка VK подключена. 🛍")
             except VKAPIError:
