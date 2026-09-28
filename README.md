@@ -37,4 +37,4 @@ The service refuses to start when required settings are missing or invalid. `VK_
 
 ## Current stage
 
-Stage 3 (environment configuration) is complete. The next development stage is database integration.
+Stage 5 (user management) is complete. Users are created or updated from VK `message_new` events, their VK identity is stored in SQLite, and blocked users are denied marketplace access. The next development stage is listing management.
