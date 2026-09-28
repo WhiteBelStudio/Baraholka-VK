@@ -79,7 +79,7 @@ async def vk_callback(request: Request) -> str:
                 await vk.send_message(int(user_id), reply, keyboard=keyboard)
             except Exception:
                 logger.exception("Failed to start listing dialog for user %s", user_id)
-                await vk.send_message(vk_user_id, "Не удалось начать создание объявления. Попробуйте ещё раз.")
+                await vk.send_message(int(user_id), "Не удалось начать создание объявления. Попробуйте ещё раз.")
             return "ok"
 
         user = await create_or_update_user(
