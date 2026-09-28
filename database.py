@@ -113,10 +113,7 @@ async def create_or_update_user(
             (vk_user_id, first_name, last_name),
         )
         await db.commit()
-        cursor = await db.execute(
-            "SELECT id FROM users WHERE vk_user_id = ?",
-            (vk_user_id,),
-        )
+        cursor = await db.execute("SELECT id FROM users WHERE vk_user_id = ?", (vk_user_id,))
         row = await cursor.fetchone()
         if row is None:
             raise RuntimeError("Failed to create or load user")
@@ -124,10 +121,7 @@ async def create_or_update_user(
 
 
 async def get_user_by_vk_id(vk_user_id: int) -> aiosqlite.Row | None:
-    return await fetch_one(
-        "SELECT * FROM users WHERE vk_user_id = ?",
-        (vk_user_id,),
-    )
+    return await fetch_one("SELECT * FROM users WHERE vk_user_id = ?", (vk_user_id,))
 
 
 async def set_user_blocked(vk_user_id: int, blocked: bool) -> None:
@@ -139,10 +133,7 @@ async def set_user_blocked(vk_user_id: int, blocked: bool) -> None:
 
 async def create_listing(user_id: int) -> int:
     async with await get_db() as db:
-        cursor = await db.execute(
-            "INSERT INTO listings (user_id) VALUES (?)",
-            (user_id,),
-        )
+        cursor = await db.execute("INSERT INTO listings (user_id) VALUES (?)", (user_id,))
         await db.commit()
         if cursor.lastrowid is None:
             raise RuntimeError("Failed to create listing")
@@ -150,16 +141,33 @@ async def create_listing(user_id: int) -> int:
 
 
 async def get_listing(listing_id: int) -> aiosqlite.Row | None:
+    return await fetch_one("SELECT * FROM listings WHERE id = ?", (listing_id,))
+
+
+async def get_listing_for_user(listing_id: int, user_id: int) -> aiosqlite.Row | None:
     return await fetch_one(
-        "SELECT * FROM listings WHERE id = ?",
-        (listing_id,),
+        "SELECT * FROM listings WHERE id = ? AND user_id = ?",
+        (listing_id, user_id),
     )
 
 
-async def get_user_listings(user_id: int) -> list[aiosqlite.Row]:
+async def get_user_listings(user_id: int, statuses: tuple[str, ...] | None = None) -> list[aiosqlite.Row]:
+    if not statuses:
+        return await fetch_all(
+            "SELECT * FROM listings WHERE user_id = ? ORDER BY id DESC",
+            (user_id,),
+        )
+    placeholders = ",".join("?" for _ in statuses)
     return await fetch_all(
-        "SELECT * FROM listings WHERE user_id = ? ORDER BY id DESC",
-        (user_id,),
+        f"SELECT * FROM listings WHERE user_id = ? AND status IN ({placeholders}) ORDER BY id DESC",
+        (user_id, *statuses),
+    )
+
+
+async def get_listings_by_status(status: str) -> list[aiosqlite.Row]:
+    return await fetch_all(
+        "SELECT * FROM listings WHERE status = ? ORDER BY id ASC",
+        (status,),
     )
 
 
@@ -180,18 +188,23 @@ async def update_listing(listing_id: int, **fields: Any) -> None:
     assignments = ", ".join(f"{key} = ?" for key, _ in changes)
     values = [value for _, value in changes]
     values.append(listing_id)
-
     await execute(
         f"UPDATE listings SET {assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         tuple(values),
     )
 
 
-async def add_listing_photo(
-    listing_id: int,
-    vk_attachment: str,
-    position: int = 0,
-) -> int:
+async def delete_listing(listing_id: int, user_id: int | None = None) -> bool:
+    if user_id is None:
+        query = "DELETE FROM listings WHERE id = ?"
+        params = (listing_id,)
+    else:
+        query = "DELETE FROM listings WHERE id = ? AND user_id = ?"
+        params = (listing_id, user_id)
+    return await execute(query, params) > 0
+
+
+async def add_listing_photo(listing_id: int, vk_attachment: str, position: int = 0) -> int:
     async with await get_db() as db:
         cursor = await db.execute(
             """
@@ -213,6 +226,20 @@ async def get_listing_photos(listing_id: int) -> list[aiosqlite.Row]:
     )
 
 
+async def delete_listing_photo(photo_id: int, listing_id: int | None = None) -> bool:
+    if listing_id is None:
+        query = "DELETE FROM listing_photos WHERE id = ?"
+        params = (photo_id,)
+    else:
+        query = "DELETE FROM listing_photos WHERE id = ? AND listing_id = ?"
+        params = (photo_id, listing_id)
+    return await execute(query, params) > 0
+
+
+async def clear_listing_photos(listing_id: int) -> int:
+    return await execute("DELETE FROM listing_photos WHERE listing_id = ?", (listing_id,))
+
+
 async def add_moderation_log(
     listing_id: int,
     admin_vk_user_id: int,
@@ -221,8 +248,7 @@ async def add_moderation_log(
 ) -> None:
     await execute(
         """
-        INSERT INTO moderation_logs
-            (listing_id, admin_vk_user_id, action, reason)
+        INSERT INTO moderation_logs (listing_id, admin_vk_user_id, action, reason)
         VALUES (?, ?, ?, ?)
         """,
         (listing_id, admin_vk_user_id, action, reason),
