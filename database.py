@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import aiosqlite
@@ -17,21 +16,23 @@ CREATE TABLE IF NOT EXISTS users (
     first_name TEXT,
     last_name TEXT,
     is_blocked INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS listings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
-    title TEXT,
-    category TEXT,
-    description TEXT,
-    price TEXT,
-    city TEXT,
+    title TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    price TEXT NOT NULL DEFAULT '',
+    city TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'draft',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(user_id) REFERENCES users(id)
+    published_post_id INTEGER,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS listing_photos (
@@ -39,7 +40,7 @@ CREATE TABLE IF NOT EXISTS listing_photos (
     listing_id INTEGER NOT NULL,
     vk_attachment TEXT NOT NULL,
     position INTEGER NOT NULL DEFAULT 0,
-    FOREIGN KEY(listing_id) REFERENCES listings(id)
+    FOREIGN KEY(listing_id) REFERENCES listings(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS moderation_logs (
@@ -48,8 +49,16 @@ CREATE TABLE IF NOT EXISTS moderation_logs (
     admin_vk_user_id INTEGER NOT NULL,
     action TEXT NOT NULL,
     reason TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(listing_id) REFERENCES listings(id) ON DELETE CASCADE
 );
+
+CREATE INDEX IF NOT EXISTS idx_users_blocked ON users(is_blocked);
+CREATE INDEX IF NOT EXISTS idx_listings_user_status ON listings(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_listings_status ON listings(status);
+CREATE INDEX IF NOT EXISTS idx_listings_city ON listings(city);
+CREATE INDEX IF NOT EXISTS idx_listing_photos_listing ON listing_photos(listing_id, position);
+CREATE INDEX IF NOT EXISTS idx_moderation_logs_listing ON moderation_logs(listing_id, created_at);
 """
 
 
@@ -67,10 +76,11 @@ async def init_db() -> None:
         await db.commit()
 
 
-async def execute(query: str, parameters: tuple[Any, ...] = ()) -> None:
+async def execute(query: str, parameters: tuple[Any, ...] = ()) -> int:
     async with await get_db() as db:
-        await db.execute(query, parameters)
+        cursor = await db.execute(query, parameters)
         await db.commit()
+        return cursor.rowcount
 
 
 async def fetch_one(query: str, parameters: tuple[Any, ...] = ()) -> aiosqlite.Row | None:
@@ -83,3 +93,137 @@ async def fetch_all(query: str, parameters: tuple[Any, ...] = ()) -> list[aiosql
     async with await get_db() as db:
         cursor = await db.execute(query, parameters)
         return await cursor.fetchall()
+
+
+async def create_or_update_user(
+    vk_user_id: int,
+    first_name: str | None = None,
+    last_name: str | None = None,
+) -> int:
+    async with await get_db() as db:
+        await db.execute(
+            """
+            INSERT INTO users (vk_user_id, first_name, last_name)
+            VALUES (?, ?, ?)
+            ON CONFLICT(vk_user_id) DO UPDATE SET
+                first_name = excluded.first_name,
+                last_name = excluded.last_name,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (vk_user_id, first_name, last_name),
+        )
+        await db.commit()
+        cursor = await db.execute(
+            "SELECT id FROM users WHERE vk_user_id = ?",
+            (vk_user_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            raise RuntimeError("Failed to create or load user")
+        return int(row["id"])
+
+
+async def get_user_by_vk_id(vk_user_id: int) -> aiosqlite.Row | None:
+    return await fetch_one(
+        "SELECT * FROM users WHERE vk_user_id = ?",
+        (vk_user_id,),
+    )
+
+
+async def set_user_blocked(vk_user_id: int, blocked: bool) -> None:
+    await execute(
+        "UPDATE users SET is_blocked = ?, updated_at = CURRENT_TIMESTAMP WHERE vk_user_id = ?",
+        (int(blocked), vk_user_id),
+    )
+
+
+async def create_listing(user_id: int) -> int:
+    async with await get_db() as db:
+        cursor = await db.execute(
+            "INSERT INTO listings (user_id) VALUES (?)",
+            (user_id,),
+        )
+        await db.commit()
+        if cursor.lastrowid is None:
+            raise RuntimeError("Failed to create listing")
+        return int(cursor.lastrowid)
+
+
+async def get_listing(listing_id: int) -> aiosqlite.Row | None:
+    return await fetch_one(
+        "SELECT * FROM listings WHERE id = ?",
+        (listing_id,),
+    )
+
+
+async def get_user_listings(user_id: int) -> list[aiosqlite.Row]:
+    return await fetch_all(
+        "SELECT * FROM listings WHERE user_id = ? ORDER BY id DESC",
+        (user_id,),
+    )
+
+
+async def update_listing(listing_id: int, **fields: Any) -> None:
+    allowed = {
+        "title",
+        "category",
+        "description",
+        "price",
+        "city",
+        "status",
+        "published_post_id",
+    }
+    changes = [(key, value) for key, value in fields.items() if key in allowed]
+    if not changes:
+        return
+
+    assignments = ", ".join(f"{key} = ?" for key, _ in changes)
+    values = [value for _, value in changes]
+    values.append(listing_id)
+
+    await execute(
+        f"UPDATE listings SET {assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        tuple(values),
+    )
+
+
+async def add_listing_photo(
+    listing_id: int,
+    vk_attachment: str,
+    position: int = 0,
+) -> int:
+    async with await get_db() as db:
+        cursor = await db.execute(
+            """
+            INSERT INTO listing_photos (listing_id, vk_attachment, position)
+            VALUES (?, ?, ?)
+            """,
+            (listing_id, vk_attachment, position),
+        )
+        await db.commit()
+        if cursor.lastrowid is None:
+            raise RuntimeError("Failed to add listing photo")
+        return int(cursor.lastrowid)
+
+
+async def get_listing_photos(listing_id: int) -> list[aiosqlite.Row]:
+    return await fetch_all(
+        "SELECT * FROM listing_photos WHERE listing_id = ? ORDER BY position, id",
+        (listing_id,),
+    )
+
+
+async def add_moderation_log(
+    listing_id: int,
+    admin_vk_user_id: int,
+    action: str,
+    reason: str | None = None,
+) -> None:
+    await execute(
+        """
+        INSERT INTO moderation_logs
+            (listing_id, admin_vk_user_id, action, reason)
+        VALUES (?, ?, ?, ?)
+        """,
+        (listing_id, admin_vk_user_id, action, reason),
+    )
