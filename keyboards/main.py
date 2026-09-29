@@ -8,7 +8,7 @@ def _button(label: str, command: str, color: str = "primary") -> dict[str, Any]:
 
 
 def main_keyboard(role: str | None = None) -> dict[str, Any]:
-    buttons = [[_button("🛍 Подать объявление", "create_listing")], [_button("📦 Мои объявления", "my_listings", "secondary")]]
+    buttons = [[_button("🛍 Подать объявление", "create_listing")], [_button("📦 Мои объявления", "my_listings", "secondary")], [_button("📋 Правила", "rules", "secondary")]]
     if role in {"owner", "moderator"}:
         buttons.append([_button("🛡 Очередь модерации", "moderation_queue", "secondary")])
     return {"one_time": False, "inline": False, "buttons": buttons}
