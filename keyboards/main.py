@@ -1,27 +1,14 @@
 from __future__ import annotations
-
 import json
 from typing import Any
 
 
+def _button(label: str, command: str, color: str = "primary") -> dict[str, Any]:
+    return {"action": {"type": "text", "label": label, "payload": json.dumps({"command": command}, ensure_ascii=False)}, "color": color}
+
+
 def main_keyboard(is_admin: bool = False) -> dict[str, Any]:
-    buttons = [[
-        {
-            "action": {
-                "type": "text",
-                "label": "🛍 Подать объявление",
-                "payload": json.dumps({"command": "create_listing"}, ensure_ascii=False),
-            },
-            "color": "primary",
-        }
-    ]]
+    buttons = [[_button("🛍 Подать объявление", "create_listing")], [_button("📦 Мои объявления", "my_listings", "secondary")]]
     if is_admin:
-        buttons.append([{
-            "action": {
-                "type": "text",
-                "label": "🛡 Очередь модерации",
-                "payload": json.dumps({"command": "moderation_queue"}, ensure_ascii=False),
-            },
-            "color": "secondary",
-        }])
+        buttons.append([_button("🛡 Очередь модерации", "moderation_queue", "secondary")])
     return {"one_time": False, "inline": False, "buttons": buttons}
