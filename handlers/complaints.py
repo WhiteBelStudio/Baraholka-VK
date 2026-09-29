@@ -47,9 +47,15 @@ async def handle_complaint_reason(user_id: int, text: str) -> tuple[str, dict[st
         return "", {}
     reason = " ".join((text or "").split())
     if len(reason) < 5:
-        return "⚠️ Причина должна содержать минимум 5 символов. Опишите проблему подробнее.", complaint_confirm_keyboard(int(pending["listing_id"]), int(pending["id"]))
+        return (
+            "⚠️ Причина должна содержать минимум 5 символов. Опишите проблему подробнее.",
+            complaint_confirm_keyboard(int(pending["listing_id"]), int(pending["id"])),
+        )
     if len(reason) > 1000:
-        return "⚠️ Причина слишком длинная. Максимум 1000 символов.", complaint_confirm_keyboard(int(pending["listing_id"]), int(pending["id"]))
+        return (
+            "⚠️ Причина слишком длинная. Максимум 1000 символов.",
+            complaint_confirm_keyboard(int(pending["listing_id"]), int(pending["id"])),
+        )
     if await finish_complaint(int(pending["id"]), user_id, reason):
         return f"✅ Жалоба №{pending['id']} отправлена администрации на рассмотрение.", {}
     return "⚠️ Не удалось отправить жалобу. Попробуйте ещё раз.", {}
@@ -61,7 +67,8 @@ async def cancel_user_complaint(user_id: int, complaint_id: int | None = None) -
         return "ℹ️ Активной жалобы нет.", {}
     if complaint_id is not None and int(pending["id"]) != complaint_id:
         return "⚠️ Жалоба не найдена.", {}
-    await cancel_complaint(int(pending["id"]), user_id)
+    if not await cancel_complaint(int(pending["id"]), user_id):
+        return "⚠️ Не удалось отменить жалобу. Попробуйте ещё раз.", {}
     return "❌ Жалоба отменена.", {}
 
 
@@ -74,7 +81,12 @@ async def show_complaints_queue(admin_id: int) -> tuple[str, dict[str, Any]]:
         return "🚨 Жалоб на рассмотрении нет.", complaints_queue_keyboard([])
     lines = ["🚨 Жалобы на объявления", ""]
     for c in complaints[:30]:
-        lines += [f"№{c['id']} · объявление №{c['listing_id']}", f"🛍 {c['title']}", f"📝 {c['reason']}", ""]
+        lines += [
+            f"№{c['id']} · объявление №{c['listing_id']}",
+            f"🛍 {c['title']}",
+            f"📝 {c['reason']}",
+            "",
+        ]
     return "\n".join(lines).rstrip(), complaints_queue_keyboard([int(c["id"]) for c in complaints[:30]])
 
 
