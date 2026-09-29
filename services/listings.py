@@ -244,6 +244,11 @@ async def submit_for_moderation(listing_id: int) -> None:
         city=listing["city"],
     )
     validate_listing(data)
+    photos = await get_listing_photos(listing_id)
+    if not photos:
+        raise ListingValidationError("Для отправки на модерацию добавьте хотя бы 1 фотографию")
+    if len(photos) > PHOTO_MAX:
+        raise ListingValidationError("Можно добавить не более 3 фотографий")
     await set_listing_status(listing_id, ListingStatus.MODERATION)
 
 
