@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
 from config import settings
-from database import create_or_update_user, get_user_by_vk_id, init_db, set_user_blocked
+from database import add_admin_action_log, create_or_update_user, get_user_by_vk_id, init_db, set_user_blocked
 from handlers.moderation import open_moderation_listing, show_moderation_queue
 from handlers.complaints import (
     cancel_user_complaint,
@@ -93,6 +93,7 @@ async def vk_callback(request: Request) -> str:
                 await vk.send_message(user_id, "ℹ️ Статус пользователя уже такой.")
                 return "ok"
             await set_user_blocked(target_id, want_block)
+            await add_admin_action_log(user_id, "user_banned" if want_block else "user_unbanned", target_vk_user_id=target_id)
             action = "заблокирован" if want_block else "разблокирован"
             await vk.send_message(user_id, f"✅ Пользователь VK ID {target_id} {action}.")
             return "ok"
