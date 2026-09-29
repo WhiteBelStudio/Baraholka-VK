@@ -19,7 +19,7 @@ from handlers.complaints import (
     show_complaints_queue,
     start_complaint,
 )
-from handlers.listings import START_BUTTON, MY_LISTINGS_BUTTON, confirm_delete_my_listing, cancel_delete_my_listing, handle_listing_message, open_listing_editor, open_my_listing, select_edit_field, show_my_listings, start_listing
+from handlers.listings import START_BUTTON, MY_LISTINGS_BUTTON, cancel_delete_my_listing, confirm_delete_my_listing, handle_listing_message, open_listing_editor, open_my_listing, request_delete_my_listing, select_edit_field, show_my_listings, start_listing
 from keyboards.main import main_keyboard
 from services.cleanup import cleanup_loop
 from services.moderation import approve_listing_for_admin, handle_rejection_reason, start_rejection_for_admin, submit_listing_for_moderation
@@ -195,7 +195,6 @@ async def vk_callback(request: Request) -> str:
             reply, keyboard = await open_my_listing(user, listing_id)
         elif command == "delete_my_listing":
             listing_id = int(data.get("listing_id", 0) or 0)
-            from handlers.listings import request_delete_my_listing
             reply, keyboard = await request_delete_my_listing(user, listing_id)
         elif command == "confirm_delete_my_listing":
             listing_id = int(data.get("listing_id", 0) or 0)
