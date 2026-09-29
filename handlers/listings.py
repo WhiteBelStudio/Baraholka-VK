@@ -2,14 +2,27 @@ from __future__ import annotations
 
 from typing import Any
 
-from database import delete_listing, get_user_listings
-from keyboards.listings import listing_creation_keyboard, listing_preview_keyboard
+from database import delete_listing, get_user_listings, update_listing
+from keyboards.listings import (
+    listing_creation_keyboard,
+    listing_edit_keyboard,
+    listing_preview_keyboard,
+)
 from services.listings import ListingStatus, create_draft, get_photos, save_draft_field
 from states import FIELD_PROMPTS, ListingState
 
 START_BUTTON = "🛍 Подать объявление"
 CANCEL_BUTTON = "❌ Отмена"
 PREVIEW_BUTTON = "👀 Предпросмотр"
+EDIT_BUTTON = "✏️ Изменить"
+
+_EDIT_FIELDS = {
+    "edit_title": (ListingState.TITLE, "title"),
+    "edit_category": (ListingState.CATEGORY, "category"),
+    "edit_description": (ListingState.DESCRIPTION, "description"),
+    "edit_price": (ListingState.PRICE, "price"),
+    "edit_city": (ListingState.CITY, "city"),
+}
 
 _ORDER = (
     ListingState.TITLE,
@@ -117,12 +130,46 @@ async def start_listing(user_id: int) -> tuple[str, dict[str, Any]]:
     )
 
 
-async def cancel_listing(user_id: int) -> tuple[str, dict[str, Any]]:
+async def open_listing_editor(user_id: int) -> tuple[str, dict[str, Any]]:
     drafts = await get_user_listings(user_id, (ListingStatus.DRAFT,))
     if not drafts:
         return "Активного черновика нет.", {}
-    await delete_listing(int(drafts[0]["id"]), user_id)
-    return "❌ Создание объявления отменено. Черновик удалён.", {}
+    return (
+        "✏️ Редактирование объявления
+
+"
+        "Выберите поле, которое хотите изменить. После сохранения можно сразу вернуться к предпросмотру.",
+        listing_edit_keyboard(),
+    )
+
+
+async def select_edit_field(user_id: int, command: str) -> tuple[str, dict[str, Any]]:
+    field_data = _EDIT_FIELDS.get(command)
+    if field_data is None:
+        return "⚠️ Неизвестное поле для редактирования.", listing_edit_keyboard()
+
+    drafts = await get_user_listings(user_id, (ListingStatus.DRAFT,))
+    if not drafts:
+        return "Активного черновика нет.", {}
+
+    state, field = field_data
+    listing = drafts[0]
+    await update_listing(int(listing["id"]), editing_field=field)
+    current = str(listing[field] or "")
+    return (
+        f"✏️ Изменение поля «{state.value}»
+
+"
+        f"Текущее значение:
+{current or '—'}
+
+"
+        f"{FIELD_PROMPTS[state]}
+
+"
+        "Отправьте новое значение одним сообщением.",
+        listing_edit_keyboard(),
+    )
 
 
 async def handle_listing_message(
@@ -142,6 +189,23 @@ async def handle_listing_message(
         return "Чтобы начать создание объявления, нажмите «🛍 Подать объявление».", {}
 
     listing = drafts[0]
+    editing_field = str(listing["editing_field"] or "").strip()
+
+    if editing_field:
+        if not text:
+            return "⚠️ Новое значение не может быть пустым. Отправьте значение ещё раз.", listing_edit_keyboard()
+        try:
+            await save_draft_field(int(listing["id"]), editing_field, text)
+        except ValueError as exc:
+            state = next((item[0] for item in _EDIT_FIELDS.values() if item[1] == editing_field), None)
+            prompt = FIELD_PROMPTS[state] if state else "Введите новое значение."
+            return f"⚠️ {exc}
+
+{prompt}", listing_edit_keyboard()
+
+        await update_listing(int(listing["id"]), editing_field=None)
+        return await build_listing_preview(user_id)
+
     state = _next_state(listing)
     if state is None:
         return await build_listing_preview(user_id)
@@ -175,3 +239,11 @@ async def handle_listing_message(
     return f"✅ Сохранено.
 
 {FIELD_PROMPTS[next_state]}", listing_creation_keyboard()
+
+
+async def cancel_listing(user_id: int) -> tuple[str, dict[str, Any]]:
+    drafts = await get_user_listings(user_id, (ListingStatus.DRAFT,))
+    if not drafts:
+        return "Активного черновика нет.", {}
+    await delete_listing(int(drafts[0]["id"]), user_id)
+    return "❌ Создание объявления отменено. Черновик удалён.", {}
