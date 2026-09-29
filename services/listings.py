@@ -247,13 +247,29 @@ async def submit_for_moderation(listing_id: int) -> None:
     await set_listing_status(listing_id, ListingStatus.MODERATION)
 
 
+PHOTO_MIN = 1
+PHOTO_MAX = 3
+VIDEO_MAX = 1
+
+
+async def validate_media(listing_id: int, photos: list[str], video: str | None = None) -> tuple[list[str], str | None]:
+    await get_listing_or_raise(listing_id)
+    clean_photos = [item.strip() for item in photos if item and item.strip()]
+    if not PHOTO_MIN <= len(clean_photos) <= PHOTO_MAX:
+        raise ListingValidationError("Нужно добавить от 1 до 3 фотографий")
+    clean_video = (video or "").strip() or None
+    if clean_video and VIDEO_MAX != 1:
+        raise ListingValidationError("Можно добавить не более одного видео")
+    return clean_photos, clean_video
+
+
 async def attach_photo(listing_id: int, vk_attachment: str, position: int = 0) -> int:
     await get_listing_or_raise(listing_id)
     attachment = (vk_attachment or "").strip()
     if not attachment:
         raise ListingValidationError("vk_attachment must not be empty")
-    if position < 0:
-        raise ListingValidationError("position must be >= 0")
+    if position < 0 or position >= PHOTO_MAX:
+        raise ListingValidationError("Позиция фотографии должна быть от 0 до 2")
     return await add_listing_photo(listing_id, attachment, position)
 
 
