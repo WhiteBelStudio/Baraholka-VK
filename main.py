@@ -137,7 +137,7 @@ async def vk_callback(request: Request) -> str:
             if not keyboard:
                 keyboard = main_keyboard(settings.role_for(user_id))
         elif command == "main_menu":
-            reply, keyboard = "🏠 Главное меню", main_keyboard(user_id in settings.administrators)
+            reply, keyboard = "🏠 Главное меню", main_keyboard(settings.role_for(user_id))
         elif command == "moderation_queue" or text == "🛡 Очередь модерации":
             reply, keyboard = await show_moderation_queue(user_id)
         elif command == "open_moderation":
