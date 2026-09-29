@@ -52,3 +52,40 @@ def moderation_item_keyboard(listing_id: int) -> dict[str, Any]:
             }
         ]],
     }
+
+
+def archive_keyboard(listing_ids: list[int] | None = None) -> dict[str, Any]:
+    buttons = []
+    for listing_id in listing_ids or []:
+        buttons.append([{
+            "action": {
+                "type": "text",
+                "label": f"🗄 Архивировать №{listing_id}",
+                "payload": json.dumps({"command": "archive_listing", "listing_id": listing_id}, ensure_ascii=False),
+            },
+            "color": "secondary",
+        }])
+    buttons.append([{
+        "action": {
+            "type": "text",
+            "label": "🔄 Обновить архив",
+            "payload": json.dumps({"command": "archive", "refresh": True}, ensure_ascii=False),
+        },
+        "color": "secondary",
+    }])
+    return {"one_time": False, "inline": True, "buttons": buttons}
+
+
+def archived_listing_keyboard(listing_id: int) -> dict[str, Any]:
+    return {
+        "one_time": False,
+        "inline": True,
+        "buttons": [[{
+            "action": {
+                "type": "text",
+                "label": "♻️ Восстановить",
+                "payload": json.dumps({"command": "restore_listing", "listing_id": listing_id}, ensure_ascii=False),
+            },
+            "color": "positive",
+        }]],
+    }
