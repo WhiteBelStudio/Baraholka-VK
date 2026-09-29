@@ -23,6 +23,17 @@ from services.listings import ListingStatus, ListingValidationError, set_listing
 from services.vk import VKClient
 
 
+async def _notify_seller(vk: VKClient, seller_vk_id: int, message: str) -> bool:
+    for attempt in range(2):
+        try:
+            await vk.send_message(seller_vk_id, message)
+            return True
+        except Exception:
+            if attempt == 0:
+                continue
+    return False
+
+
 def moderation_keyboard(listing_id: int) -> dict[str, Any]:
     def button(label: str, command: str, color: str) -> dict[str, Any]:
         return {
@@ -168,7 +179,7 @@ async def reject_listing_for_admin(
     if seller is None:
         return "⚠️ Не удалось определить продавца.", {}
 
-    changed = await update_listing(listing_id, status=ListingStatus.REJECTED)
+    await update_listing(listing_id, status=ListingStatus.REJECTED)
     await clear_rejection_session(admin_vk_user_id)
     await add_moderation_log(listing_id, admin_vk_user_id, "rejected", clean_reason)
     await add_admin_action_log(
@@ -179,14 +190,9 @@ async def reject_listing_for_admin(
         details=clean_reason,
     )
 
-    try:
-        await vk.send_message(
-            int(seller["vk_user_id"]),
-            f"❌ Объявление №{listing_id} отклонено.\n\n"
-            f"Причина: {clean_reason}",
-        )
-    except Exception:
-        pass
+    notified = await _notify_seller(vk, int(seller["vk_user_id"]), f"❌ Объявление №{listing_id} отклонено.\n\nПричина: {clean_reason}")
+    if not notified:
+        await add_admin_action_log(admin_vk_user_id, "seller_notification_failed", target_vk_user_id=int(seller["vk_user_id"]), listing_id=listing_id, details="rejection notification failed after retry")
 
     return f"❌ Объявление №{listing_id} отклонено.\nПричина: {clean_reason}", {}
 
@@ -256,14 +262,9 @@ async def publish_listing_for_admin(
         details=f"published_post_id={post_id}",
     )
 
-    try:
-        await vk.send_message(
-            int(seller["vk_user_id"]),
-            f"✅ Объявление №{listing_id} одобрено и опубликовано.\n\n"
-            "Ваше объявление теперь доступно в группе.",
-        )
-    except Exception:
-        pass
+    notified = await _notify_seller(vk, int(seller["vk_user_id"]), f"✅ Объявление №{listing_id} одобрено и опубликовано.\n\nВаше объявление теперь доступно в группе.")
+    if not notified:
+        await add_admin_action_log(admin_vk_user_id, "seller_notification_failed", target_vk_user_id=int(seller["vk_user_id"]), listing_id=listing_id, details=f"approval notification failed after retry; published_post_id={post_id}")
 
     return f"✅ Объявление №{listing_id} одобрено и опубликовано.\nVK post ID: {post_id}", {}
 
