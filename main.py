@@ -8,6 +8,7 @@ from fastapi.responses import PlainTextResponse
 from config import settings
 from database import create_or_update_user, get_user_by_vk_id, init_db
 from handlers.moderation import open_moderation_listing, show_moderation_queue
+from handlers.complaints import handle_complaint_reason, open_complaint, show_complaints_queue, start_complaint
 from handlers.listings import START_BUTTON, MY_LISTINGS_BUTTON, handle_listing_message, open_listing_editor, open_my_listing, select_edit_field, show_my_listings, start_listing
 from keyboards.main import main_keyboard
 from services.moderation import submit_listing_for_moderation
@@ -80,6 +81,14 @@ async def vk_callback(request: Request) -> str:
         elif command == "open_my_listing":
             listing_id = int(data.get("listing_id", 0) or 0)
             reply, keyboard = await open_my_listing(user, listing_id)
+        elif command == "start_complaint":
+            reply, keyboard = await start_complaint(user, int(data.get("listing_id", 0) or 0))
+        elif command == "complaints_queue":
+            reply, keyboard = await show_complaints_queue(user_id)
+        elif command == "open_complaint":
+            reply, keyboard = await open_complaint(user_id, int(data.get("complaint_id", 0) or 0))
+        elif command == "cancel_complaint":
+            reply, keyboard = "❌ Жалоба отменена.", main_keyboard(user_id in settings.administrators)
         elif command == "main_menu":
             reply, keyboard = "🏠 Главное меню", main_keyboard(user_id in settings.administrators)
         elif command == "moderation_queue" or text == "🛡 Очередь модерации":
@@ -99,6 +108,11 @@ async def vk_callback(request: Request) -> str:
         elif command == "cancel_listing" or text == "❌ Отмена":
             reply, keyboard = await handle_listing_message(user, "❌ Отмена")
         else:
+            complaint_reply, complaint_keyboard = await handle_complaint_reason(user, text)
+            if complaint_reply:
+                reply, keyboard = complaint_reply, complaint_keyboard
+                await vk.send_message(user_id, reply, keyboard=keyboard)
+                return "ok"
             attachments = []
             for attachment in message.get("attachments") or []:
                 if attachment.get("type") != "photo":
