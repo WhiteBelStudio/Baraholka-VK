@@ -12,6 +12,9 @@ from database import (
     get_listing,
     get_listing_photos,
     get_user_by_vk_id,
+    clear_rejection_session,
+    get_rejection_session,
+    set_rejection_session,
     get_user_listings,
     restore_archived_listing,
     update_listing,
@@ -113,6 +116,92 @@ async def submit_listing_for_moderation(user_id: int, vk: VKClient) -> tuple[str
         "После проверки вы получите сообщение о результате.",
         {},
     )
+
+
+async def start_rejection_for_admin(
+    listing_id: int,
+    admin_vk_user_id: int,
+) -> tuple[str, dict[str, Any]]:
+    if not settings.can_moderate(admin_vk_user_id):
+        return "⛔ У вас нет прав для отклонения объявлений.", {}
+
+    listing = await get_listing(listing_id)
+    if listing is None:
+        return "⚠️ Объявление не найдено.", {}
+    if listing["status"] != ListingStatus.MODERATION:
+        return "ℹ️ Это объявление уже обработано или не находится на модерации.", {}
+
+    await set_rejection_session(admin_vk_user_id, listing_id)
+    return (
+        f"❌ Отклонение объявления №{listing_id}\n\n"
+        "📝 Напишите причину отклонения одним сообщением.\n"
+        "Причина обязательна, минимум 5 символов, максимум 1000.",
+        {},
+    )
+
+
+async def reject_listing_for_admin(
+    listing_id: int,
+    admin_vk_user_id: int,
+    reason: str,
+    vk: VKClient,
+) -> tuple[str, dict[str, Any]]:
+    if not settings.can_moderate(admin_vk_user_id):
+        return "⛔ У вас нет прав для отклонения объявлений.", {}
+
+    listing = await get_listing(listing_id)
+    if listing is None:
+        await clear_rejection_session(admin_vk_user_id)
+        return "⚠️ Объявление не найдено.", {}
+
+    if listing["status"] != ListingStatus.MODERATION:
+        await clear_rejection_session(admin_vk_user_id)
+        return "ℹ️ Это объявление уже обработано или не находится на модерации.", {}
+
+    clean_reason = " ".join((reason or "").split())
+    if len(clean_reason) < 5:
+        return "⚠️ Причина должна содержать минимум 5 символов.", {}
+    if len(clean_reason) > 1000:
+        return "⚠️ Причина слишком длинная. Максимум 1000 символов.", {}
+
+    seller = await get_user_by_internal_id(int(listing["user_id"]))
+    if seller is None:
+        return "⚠️ Не удалось определить продавца.", {}
+
+    changed = await update_listing(listing_id, status=ListingStatus.REJECTED)
+    await clear_rejection_session(admin_vk_user_id)
+    await add_moderation_log(listing_id, admin_vk_user_id, "rejected", clean_reason)
+    await add_admin_action_log(
+        admin_vk_user_id,
+        "listing_rejected",
+        target_vk_user_id=int(seller["vk_user_id"]),
+        listing_id=listing_id,
+        details=clean_reason,
+    )
+
+    try:
+        await vk.send_message(
+            int(seller["vk_user_id"]),
+            f"❌ Объявление №{listing_id} отклонено.\n\n"
+            f"Причина: {clean_reason}",
+        )
+    except Exception:
+        pass
+
+    return f"❌ Объявление №{listing_id} отклонено.\nПричина: {clean_reason}", {}
+
+
+async def handle_rejection_reason(
+    admin_vk_user_id: int,
+    text: str,
+    vk: VKClient,
+) -> tuple[str, dict[str, Any]]:
+    session = await get_rejection_session(admin_vk_user_id)
+    if session is None:
+        return "", {}
+
+    listing_id = int(session["listing_id"])
+    return await reject_listing_for_admin(listing_id, admin_vk_user_id, text, vk)
 
 
 async def approve_listing_for_admin(
