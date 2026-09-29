@@ -21,6 +21,14 @@ def moderation_queue_keyboard(listing_ids: list[int] | None = None) -> dict[str,
     buttons.append([{
         "action": {
             "type": "text",
+            "label": "📊 Статистика",
+            "payload": json.dumps({"command": "statistics"}, ensure_ascii=False),
+        },
+        "color": "secondary",
+    }])
+    buttons.append([{
+        "action": {
+            "type": "text",
             "label": "🔄 Обновить очередь",
             "payload": json.dumps({"command": "moderation_queue"}, ensure_ascii=False),
         },
