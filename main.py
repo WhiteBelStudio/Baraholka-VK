@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
 from config import settings
-from database import create_or_update_user, get_user_by_vk_id, init_db
+from database import create_or_update_user, get_user_by_vk_id, init_db, set_user_blocked
 from handlers.moderation import open_moderation_listing, show_moderation_queue
 from handlers.complaints import (
     cancel_user_complaint,
@@ -76,6 +76,27 @@ async def vk_callback(request: Request) -> str:
     command = str(data.get("command") or "").strip()
 
     try:
+        if command in {"ban_user", "unban_user"}:
+            if user_id not in settings.administrators:
+                await vk.send_message(user_id, "⛔ У вас нет прав для этого действия.")
+                return "ok"
+            target_id = int(data.get("target_vk_user_id", 0) or 0)
+            if target_id <= 0 or target_id == user_id:
+                await vk.send_message(user_id, "⚠️ Некорректный пользователь.")
+                return "ok"
+            target = await get_user_by_vk_id(target_id)
+            if target is None:
+                await vk.send_message(user_id, "⚠️ Пользователь не найден в базе.")
+                return "ok"
+            want_block = command == "ban_user"
+            if bool(target["is_blocked"]) == want_block:
+                await vk.send_message(user_id, "ℹ️ Статус пользователя уже такой.")
+                return "ok"
+            await set_user_blocked(target_id, want_block)
+            action = "заблокирован" if want_block else "разблокирован"
+            await vk.send_message(user_id, f"✅ Пользователь VK ID {target_id} {action}.")
+            return "ok"
+
         user = await create_or_update_user(user_id, message.get("first_name"), message.get("last_name"))
         current_user = await get_user_by_vk_id(user_id)
         if current_user and current_user["is_blocked"]:
