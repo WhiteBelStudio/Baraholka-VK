@@ -83,10 +83,21 @@ def validate_title(value: str) -> str:
     return title
 
 
+def validate_category(value: str) -> str:
+    category = " ".join((value or "").strip().split())
+    if not category:
+        raise ListingValidationError("Категория не может быть пустой")
+    if len(category) < 2:
+        raise ListingValidationError("Категория должна содержать минимум 2 символа")
+    if len(category) > 100:
+        raise ListingValidationError("Категория не должна превышать 100 символов")
+    return category
+
+
 def validate_listing(data: ListingData) -> ListingData:
     return ListingData(
         title=validate_title(data.title),
-        category=_clean(data.category, "category", 100),
+        category=validate_category(data.category),
         description=_clean(data.description, "description", 4000),
         price=_clean(data.price, "price", 50),
         city=_clean(data.city, "city", 100),
@@ -105,6 +116,8 @@ FIELD_LIMITS = {
 def validate_field(field: str, value: str) -> str:
     if field == "title":
         return validate_title(value)
+    if field == "category":
+        return validate_category(value)
     if field not in FIELD_LIMITS:
         raise ListingValidationError(f"Unsupported listing field: {field}")
     return _clean(value, field, FIELD_LIMITS[field])
