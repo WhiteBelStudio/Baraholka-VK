@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from config import settings
-from database import get_listing
-from keyboards.admin import archive_keyboard, archived_listing_keyboard, moderation_item_keyboard, moderation_queue_keyboard
+from database import get_listing, get_listings_by_status
+from keyboards.admin import archive_candidates_keyboard, archive_keyboard, archived_listing_keyboard, moderation_item_keyboard, moderation_queue_keyboard
 from services.listings import list_moderation_queue
 
 
@@ -57,18 +57,23 @@ async def open_moderation_listing(
 
 async def show_archive(vk_user_id: int) -> tuple[str, dict]:
     if not _is_admin(vk_user_id):
-        return "⛔ У вас нет прав для просмотра архива.", {}
-    from database import get_archived_listings
-    listings = await get_archived_listings()
-    if not listings:
-        return "🗄 Архив объявлений пуст.", archive_keyboard()
-    lines = ["🗄 Архив объявлений", "", f"Всего: {len(listings)}", ""]
-    for item in listings:
-        title = str(item["title"]).strip() or "Без названия"
-        lines.append(f"• №{item['id']} — {title} — {item['price']} ₽")
-    lines.append("")
-    lines.append("Выберите объявление для восстановления через карточку ниже.")
-    return "\n".join(lines), archive_keyboard([int(item["id"]) for item in listings])
+        return "⛔ У вас нет прав для управления архивом.", {}
+    candidates = []
+    for status in ("approved", "published", "rejected"):
+        candidates.extend(await get_listings_by_status(status))
+    archived = await get_listings_by_status("archived")
+    lines = ["🗄 Управление архивом", ""]
+    if candidates:
+        lines.append("Доступны для архивирования:")
+        for item in candidates[:20]:
+            title = str(item["title"]).strip() or "Без названия"
+            lines.append(f"• №{item['id']} — {title} — {item['status']}")
+        lines.append("")
+    else:
+        lines.append("Активных объявлений для архивирования нет.")
+        lines.append("")
+    lines.append(f"Архивных объявлений: {len(archived)}")
+    return "\n".join(lines), archive_candidates_keyboard([int(x["id"]) for x in candidates[:20]])
 
 
 async def open_archived_listing(vk_user_id: int, listing_id: int) -> tuple[str, dict]:
@@ -87,3 +92,16 @@ async def open_archived_listing(vk_user_id: int, listing_id: int) -> tuple[str, 
         f"Город: {listing['city']}"
     )
     return text, archived_listing_keyboard(listing_id)
+
+
+async def show_archived_listings(vk_user_id: int) -> tuple[str, dict]:
+    if not _is_admin(vk_user_id):
+        return "⛔ У вас нет прав для просмотра архива.", {}
+    archived = await get_listings_by_status("archived")
+    if not archived:
+        return "🗄 Архив объявлений пуст.", archive_keyboard()
+    lines = ["🗄 Архив объявлений", "", f"Всего: {len(archived)}", ""]
+    for item in archived[:20]:
+        title = str(item["title"]).strip() or "Без названия"
+        lines.append(f"• №{item['id']} — {title} — {item['price']} ₽")
+    return "\n".join(lines), archive_keyboard([int(x["id"]) for x in archived[:20]])
