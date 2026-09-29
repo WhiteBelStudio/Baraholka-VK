@@ -104,6 +104,12 @@ CREATE TABLE IF NOT EXISTS publication_rate_limits (
 
 CREATE INDEX IF NOT EXISTS idx_publication_rate_limits_blocked ON publication_rate_limits(blocked_until);
 
+CREATE TABLE IF NOT EXISTS moderation_rejection_sessions (
+    admin_vk_user_id INTEGER PRIMARY KEY,
+    listing_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS search_sessions (
     vk_user_id INTEGER PRIMARY KEY,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -458,6 +464,28 @@ async def check_publication_rate_limit(
         )
         await db.commit()
         return True, 0
+
+
+async def set_rejection_session(admin_vk_user_id: int, listing_id: int) -> None:
+    await execute(
+        "INSERT INTO moderation_rejection_sessions (admin_vk_user_id, listing_id) VALUES (?, ?) "
+        "ON CONFLICT(admin_vk_user_id) DO UPDATE SET listing_id=excluded.listing_id, created_at=CURRENT_TIMESTAMP",
+        (admin_vk_user_id, listing_id),
+    )
+
+
+async def get_rejection_session(admin_vk_user_id: int) -> aiosqlite.Row | None:
+    return await fetch_one(
+        "SELECT * FROM moderation_rejection_sessions WHERE admin_vk_user_id = ?",
+        (admin_vk_user_id,),
+    )
+
+
+async def clear_rejection_session(admin_vk_user_id: int) -> None:
+    await execute(
+        "DELETE FROM moderation_rejection_sessions WHERE admin_vk_user_id = ?",
+        (admin_vk_user_id,),
+    )
 
 
 async def set_search_session(vk_user_id: int) -> None:
