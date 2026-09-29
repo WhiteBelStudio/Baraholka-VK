@@ -22,7 +22,7 @@ from handlers.complaints import (
 from handlers.listings import START_BUTTON, MY_LISTINGS_BUTTON, handle_listing_message, open_listing_editor, open_my_listing, select_edit_field, show_my_listings, start_listing
 from keyboards.main import main_keyboard
 from services.cleanup import cleanup_loop
-from services.moderation import approve_listing_for_admin, submit_listing_for_moderation
+from services.moderation import approve_listing_for_admin, handle_rejection_reason, start_rejection_for_admin, submit_listing_for_moderation
 from services.rate_limit import check_publication_submission
 from services.rules import POLICY_TEXT, RULES_TEXT
 from services.search import (
@@ -148,6 +148,11 @@ async def vk_callback(request: Request) -> str:
             )
             return "ok"
 
+        rejection_reply, rejection_keyboard = await handle_rejection_reason(user_id, text, vk)
+        if rejection_reply:
+            await vk.send_message(user_id, rejection_reply, keyboard=rejection_keyboard)
+            return "ok"
+
         session_handled = False
         if await has_search_session(user_id):
             session_handled = True
@@ -232,6 +237,8 @@ async def vk_callback(request: Request) -> str:
             reply, keyboard = await open_moderation_listing(user_id, int(data.get("listing_id", 0) or 0))
         elif command == "approve_listing":
             reply, keyboard = await approve_listing_for_admin(int(data.get("listing_id", 0) or 0), user_id, vk)
+        elif command == "reject_listing":
+            reply, keyboard = await start_rejection_for_admin(int(data.get("listing_id", 0) or 0), user_id)
         elif text.lower() == START_BUTTON.lower() or command == "create_listing":
             reply, keyboard = await start_listing(user)
         elif command == "edit_listing" or text == "✏️ Изменить":
