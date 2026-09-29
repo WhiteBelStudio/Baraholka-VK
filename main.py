@@ -7,7 +7,7 @@ from fastapi.responses import PlainTextResponse
 
 from config import settings
 from database import create_or_update_user, get_user_by_vk_id, init_db
-from handlers.listings import (
+from handlers.moderation import open_moderation_listing, show_moderation_queue\nfrom handlers.listings import (
     START_BUTTON,
     handle_listing_message,
     open_listing_editor,
@@ -19,7 +19,7 @@ from services.moderation import submit_listing_for_moderation
 from services.vk import VKClient, VKAPIError
 
 logger = logging.getLogger(__name__)
-app = FastAPI(title="Baraholka VK", version="0.4.0")
+app = FastAPI(title="Baraholka VK", version="0.5.0")
 vk = VKClient()
 
 
@@ -94,11 +94,11 @@ async def vk_callback(request: Request) -> str:
                 user_id,
                 "Привет! Добро пожаловать в Барахолку VK.\n\n"
                 "Здесь можно подать объявление на модерацию.",
-                keyboard=main_keyboard(),
+                keyboard=main_keyboard(user_id in settings.administrators),
             )
             return "ok"
 
-        if text.lower() == START_BUTTON.lower() or command == "create_listing":
+        if command == "moderation_queue" or text == "🛡 Очередь модерации":\n            reply, keyboard = await show_moderation_queue(user_id)\n        elif command == "open_moderation":\n            raw_listing_id = (message.get("payload") or {}) if isinstance(message.get("payload"), dict) else {}\n            listing_id = int(raw_listing_id.get("listing_id", 0)) if raw_listing_id else 0\n            if not listing_id and isinstance(message.get("payload"), str):\n                try:\n                    listing_id = int(json.loads(message["payload"]).get("listing_id", 0))\n                except (TypeError, ValueError):\n                    listing_id = 0\n            reply, keyboard = await open_moderation_listing(user_id, listing_id)\n        elif text.lower() == START_BUTTON.lower() or command == "create_listing":
             reply, keyboard = await start_listing(user)
         elif command == "edit_listing" or text == "✏️ Изменить":
             reply, keyboard = await open_listing_editor(user)
