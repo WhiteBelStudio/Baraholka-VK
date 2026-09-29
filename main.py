@@ -220,6 +220,8 @@ async def vk_callback(request: Request) -> str:
             reply, keyboard = await show_moderation_queue(user_id)
         elif command == "archive" or text == "🗄 Архив":
             reply, keyboard = await show_archive(user_id)
+        elif command == "archive_list":
+            reply, keyboard = await show_archived_listings(user_id)
         elif command == "archive_listing":
             reply, keyboard = await archive_listing_for_admin(int(data.get("listing_id", 0) or 0), user_id, vk)
         elif command == "open_archived":
