@@ -207,34 +207,40 @@ async def handle_rejection_reason(
     return await reject_listing_for_admin(listing_id, admin_vk_user_id, text, vk)
 
 
-async def approve_listing_for_admin(
+async def publish_listing_for_admin(
     listing_id: int,
     admin_vk_user_id: int,
     vk: VKClient,
 ) -> tuple[str, dict[str, Any]]:
     if not settings.can_moderate(admin_vk_user_id):
-        return "⛔ У вас нет прав для одобрения объявлений.", {}
+        return "⛔ У вас нет прав для публикации объявлений.", {}
 
     listing = await get_listing(listing_id)
     if listing is None:
         return "⚠️ Объявление не найдено.", {}
 
     if listing["status"] != ListingStatus.MODERATION:
-        return "ℹ️ Это объявление уже обработано или не находится на модерации.", {}
+        return "ℹ️ Это объявление уже обрабатывается или обработано.", {}
 
     photos = await get_listing_photos(listing_id)
     if not photos:
-        return "⚠️ У объявления нет фотографий. Одобрение отменено.", {}
+        return "⚠️ У объявления нет фотографий. Публикация отменена.", {}
 
-    seller = await get_user_by_vk_id(int((await _get_listing_seller_vk_id(listing)) or 0))
+    seller = await get_user_by_internal_id(int(listing["user_id"]))
     if seller is None:
         return "⚠️ Не удалось определить продавца.", {}
+
+    # Reserve the listing before calling VK so two moderators cannot publish it twice.
+    reserved = await _reserve_for_publication(listing_id)
+    if not reserved:
+        return "ℹ️ Это объявление уже обрабатывается или обработано.", {}
 
     attachments = ",".join(str(photo["vk_attachment"]) for photo in photos)
     try:
         post_id = await vk.wall_post(_published_card(listing), attachments=attachments)
     except Exception:
-        return "⚠️ Не удалось опубликовать объявление в VK. Статус не изменён.", {}
+        await update_listing(listing_id, status=ListingStatus.MODERATION, published_post_id=None)
+        return "⚠️ Не удалось опубликовать объявление в VK. Оно возвращено на модерацию.", {}
 
     await update_listing(
         listing_id,
@@ -260,6 +266,23 @@ async def approve_listing_for_admin(
         pass
 
     return f"✅ Объявление №{listing_id} одобрено и опубликовано.\nVK post ID: {post_id}", {}
+
+
+async def _reserve_for_publication(listing_id: int) -> bool:
+    from database import execute
+    return await execute(
+        "UPDATE listings SET status = ?, updated_at = CURRENT_TIMESTAMP "
+        "WHERE id = ? AND status = ?",
+        (ListingStatus.PUBLISHING, listing_id, ListingStatus.MODERATION),
+    ) > 0
+
+
+async def approve_listing_for_admin(
+    listing_id: int,
+    admin_vk_user_id: int,
+    vk: VKClient,
+) -> tuple[str, dict[str, Any]]:
+    return await publish_listing_for_admin(listing_id, admin_vk_user_id, vk)
 
 
 async def _get_listing_seller_vk_id(listing: Any) -> int | None:
