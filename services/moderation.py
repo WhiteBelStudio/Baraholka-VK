@@ -348,9 +348,19 @@ async def restore_listing_for_admin(listing_id: int, admin_vk_user_id: int) -> t
     if not settings.can_moderate(admin_vk_user_id):
         return "⛔ У вас нет прав для восстановления.", {}
 
-    if not await restore_archived_listing(listing_id):
+    listing = await get_listing(listing_id)
+    if listing is None or listing["status"] != ListingStatus.ARCHIVED:
         return "⚠️ Архивное объявление не найдено.", {}
+
+    if not await restore_archived_listing(listing_id):
+        return "⚠️ Не удалось восстановить объявление.", {}
 
     await add_moderation_log(listing_id, admin_vk_user_id, "restored")
     await add_admin_action_log(admin_vk_user_id, "listing_restored", listing_id=listing_id)
-    return f"♻️ Объявление №{listing_id} восстановлено.", {}
+    return (
+        f"♻️ Объявление №{listing_id} восстановлено.
+
+"
+        "Статус: готово к повторной модерации/публикации.",
+        {},
+    )
