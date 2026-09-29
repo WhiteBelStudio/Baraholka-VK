@@ -12,6 +12,7 @@ from database import (
     get_pending_complaints,
     get_listing,
     update_complaint_status,
+    add_admin_action_log,
 )
 from keyboards.complaints import complaint_confirm_keyboard
 from services.listings import ListingStatus
@@ -118,6 +119,7 @@ async def resolve_complaint(admin_id: int, complaint_id: int) -> tuple[str, dict
     if str(complaint["status"]) != "pending":
         return "ℹ️ Эта жалоба уже обработана.", {}
     if await update_complaint_status(complaint_id, "resolved"):
+        await add_admin_action_log(admin_id, "complaint_resolved", listing_id=int(complaint["listing_id"]), details=f"complaint_id={complaint_id}")
         return f"✅ Жалоба №{complaint_id} принята и закрыта.", {}
     return "⚠️ Не удалось обработать жалобу.", {}
 
@@ -131,5 +133,6 @@ async def reject_complaint(admin_id: int, complaint_id: int) -> tuple[str, dict[
     if str(complaint["status"]) != "pending":
         return "ℹ️ Эта жалоба уже обработана.", {}
     if await update_complaint_status(complaint_id, "rejected"):
+        await add_admin_action_log(admin_id, "complaint_rejected", listing_id=int(complaint["listing_id"]), details=f"complaint_id={complaint_id}")
         return f"❌ Жалоба №{complaint_id} отклонена.", {}
     return "⚠️ Не удалось обработать жалобу.", {}
