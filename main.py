@@ -21,6 +21,7 @@ from handlers.complaints import (
 from handlers.listings import START_BUTTON, MY_LISTINGS_BUTTON, handle_listing_message, open_listing_editor, open_my_listing, select_edit_field, show_my_listings, start_listing
 from keyboards.main import main_keyboard
 from services.moderation import submit_listing_for_moderation
+from services.rate_limit import check_publication_submission
 from services.vk import VKClient, VKAPIError
 
 logger = logging.getLogger(__name__)
@@ -165,7 +166,11 @@ async def vk_callback(request: Request) -> str:
         elif command in {"edit_title", "edit_category", "edit_description", "edit_price", "edit_city"}:
             reply, keyboard = await select_edit_field(user, command)
         elif command == "submit_listing" or text == "🚀 Отправить на модерацию":
-            reply, keyboard = await submit_listing_for_moderation(user_id, vk)
+            allowed, retry_after = await check_publication_submission(user_id)
+            if not allowed:
+                reply, keyboard = f"⚠️ Лимит публикаций достигнут. Повторите примерно через {retry_after} сек.", {}
+            else:
+                reply, keyboard = await submit_listing_for_moderation(user_id, vk)
         elif command == "listing_preview" or text == "👀 Предпросмотр":
             reply, keyboard = await handle_listing_message(user, "👀 Предпросмотр")
         elif command == "cancel_listing" or text == "❌ Отмена":
