@@ -1,12 +1,13 @@
 import json
 import logging
+import time
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
 from config import settings
-from database import add_admin_action_log, create_or_update_user, get_user_by_vk_id, init_db, set_user_blocked
+from database import add_admin_action_log, check_rate_limit, create_or_update_user, get_user_by_vk_id, init_db, set_user_blocked
 from handlers.moderation import open_moderation_listing, show_moderation_queue
 from handlers.complaints import (
     cancel_user_complaint,
@@ -76,6 +77,20 @@ async def vk_callback(request: Request) -> str:
     command = str(data.get("command") or "").strip()
 
     try:
+        allowed, retry_after = await check_rate_limit(
+            user_id,
+            time.time(),
+            settings.spam_window_seconds,
+            settings.spam_max_messages,
+            settings.spam_cooldown_seconds,
+        )
+        if not allowed:
+            await vk.send_message(
+                user_id,
+                f"⚠️ Слишком много сообщений подряд. Попробуйте снова через {retry_after} сек.",
+            )
+            return "ok"
+
         if command in {"ban_user", "unban_user"}:
             if not settings.can_manage_users(user_id):
                 await vk.send_message(user_id, "⛔ У вас нет прав для этого действия.")
