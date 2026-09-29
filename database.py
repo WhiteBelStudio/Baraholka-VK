@@ -215,11 +215,17 @@ async def add_moderation_log(listing_id: int, admin_vk_user_id: int, action: str
 
 
 async def create_complaint(listing_id: int, reporter_user_id: int) -> int:
-    existing = await fetch_one("SELECT id FROM complaints WHERE listing_id = ? AND reporter_user_id = ? AND status IN ('pending','pending_reason') ORDER BY id DESC LIMIT 1", (listing_id, reporter_user_id))
+    existing = await fetch_one(
+        "SELECT id FROM complaints WHERE listing_id = ? AND reporter_user_id = ? AND status = 'pending_reason' ORDER BY id DESC LIMIT 1",
+        (listing_id, reporter_user_id),
+    )
     if existing:
         return int(existing["id"])
     async with await get_db() as db:
-        cursor = await db.execute("INSERT INTO complaints (listing_id, reporter_user_id, reason, status) VALUES (?, ?, '', 'pending_reason')", (listing_id, reporter_user_id))
+        cursor = await db.execute(
+            "INSERT INTO complaints (listing_id, reporter_user_id, reason, status) VALUES (?, ?, '', 'pending_reason')",
+            (listing_id, reporter_user_id),
+        )
         await db.commit()
         return int(cursor.lastrowid)
 
@@ -229,7 +235,17 @@ async def get_pending_complaint(reporter_user_id: int) -> aiosqlite.Row | None:
 
 
 async def finish_complaint(complaint_id: int, reporter_user_id: int, reason: str) -> bool:
-    return await execute("UPDATE complaints SET reason = ?, status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND reporter_user_id = ? AND status = 'pending_reason'", (reason, complaint_id, reporter_user_id)) > 0
+    return await execute(
+        "UPDATE complaints SET reason = ?, status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND reporter_user_id = ? AND status = 'pending_reason'",
+        (reason, complaint_id, reporter_user_id),
+    ) > 0
+
+
+async def cancel_complaint(complaint_id: int, reporter_user_id: int) -> bool:
+    return await execute(
+        "DELETE FROM complaints WHERE id = ? AND reporter_user_id = ? AND status = 'pending_reason'",
+        (complaint_id, reporter_user_id),
+    ) > 0
 
 
 async def get_complaint(complaint_id: int) -> aiosqlite.Row | None:
@@ -237,9 +253,25 @@ async def get_complaint(complaint_id: int) -> aiosqlite.Row | None:
 
 
 async def get_pending_complaints() -> list[aiosqlite.Row]:
-    return await fetch_all("SELECT c.*, l.title, l.status AS listing_status FROM complaints c JOIN listings l ON l.id = c.listing_id WHERE c.status = 'pending' ORDER BY c.id ASC")
+    return await fetch_all(
+        "SELECT c.*, l.title, l.status AS listing_status "
+        "FROM complaints c JOIN listings l ON l.id = c.listing_id "
+        "WHERE c.status = 'pending' ORDER BY c.id ASC"
+    )
+
+
+async def update_complaint_status(complaint_id: int, status: str) -> bool:
+    if status not in {"pending", "resolved", "rejected"}:
+        raise ValueError("Invalid complaint status")
+    return await execute(
+        "UPDATE complaints SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'",
+        (status, complaint_id),
+    ) > 0
 
 
 async def complaint_exists_for_user(listing_id: int, reporter_user_id: int) -> bool:
-    row = await fetch_one("SELECT id FROM complaints WHERE listing_id = ? AND reporter_user_id = ? AND status IN ('pending','resolved','rejected') ORDER BY id DESC LIMIT 1", (listing_id, reporter_user_id))
+    row = await fetch_one(
+        "SELECT id FROM complaints WHERE listing_id = ? AND reporter_user_id = ? AND status IN ('pending_reason','pending','resolved','rejected') ORDER BY id DESC LIMIT 1",
+        (listing_id, reporter_user_id),
+    )
     return row is not None
