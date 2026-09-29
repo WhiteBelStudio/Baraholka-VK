@@ -8,19 +8,29 @@ from fastapi.responses import PlainTextResponse
 from config import settings
 from database import create_or_update_user, get_user_by_vk_id, init_db
 from handlers.moderation import open_moderation_listing, show_moderation_queue
-from handlers.complaints import handle_complaint_reason, open_complaint, show_complaints_queue, start_complaint
+from handlers.complaints import (
+    cancel_user_complaint,
+    handle_complaint_reason,
+    open_complaint,
+    reject_complaint,
+    resolve_complaint,
+    show_complaints_queue,
+    start_complaint,
+)
 from handlers.listings import START_BUTTON, MY_LISTINGS_BUTTON, handle_listing_message, open_listing_editor, open_my_listing, select_edit_field, show_my_listings, start_listing
 from keyboards.main import main_keyboard
 from services.moderation import submit_listing_for_moderation
 from services.vk import VKClient, VKAPIError
 
 logger = logging.getLogger(__name__)
-app = FastAPI(title="Baraholka VK", version="0.5.1")
+app = FastAPI(title="Baraholka VK", version="0.5.2")
 vk = VKClient()
+
 
 @app.get("/")
 async def root() -> dict[str, str]:
     return {"status": "ok", "service": "baraholka-vk"}
+
 
 @app.get("/health")
 async def health() -> dict[str, str]:
@@ -73,7 +83,11 @@ async def vk_callback(request: Request) -> str:
             return "ok"
 
         if text.lower() in {"/start", "начать"}:
-            await vk.send_message(user_id, "Привет! Добро пожаловать в Барахолку VK.\n\nЗдесь можно подать объявление на модерацию.", keyboard=main_keyboard(user_id in settings.administrators))
+            await vk.send_message(
+                user_id,
+                "Привет! Добро пожаловать в Барахолку VK.\n\nЗдесь можно подать объявление на модерацию.",
+                keyboard=main_keyboard(user_id in settings.administrators),
+            )
             return "ok"
 
         if command == "my_listings" or text == MY_LISTINGS_BUTTON:
@@ -83,12 +97,24 @@ async def vk_callback(request: Request) -> str:
             reply, keyboard = await open_my_listing(user, listing_id)
         elif command == "start_complaint":
             reply, keyboard = await start_complaint(user, int(data.get("listing_id", 0) or 0))
+        elif command == "complaint_reason_mode":
+            pending = await handle_complaint_reason(user, "")
+            if pending[0]:
+                reply, keyboard = "📝 Напишите причину жалобы одним сообщением.", {}
+            else:
+                reply, keyboard = "📝 Напишите причину жалобы одним сообщением.", {}
         elif command == "complaints_queue":
             reply, keyboard = await show_complaints_queue(user_id)
         elif command == "open_complaint":
             reply, keyboard = await open_complaint(user_id, int(data.get("complaint_id", 0) or 0))
+        elif command == "resolve_complaint":
+            reply, keyboard = await resolve_complaint(user_id, int(data.get("complaint_id", 0) or 0))
+        elif command == "reject_complaint":
+            reply, keyboard = await reject_complaint(user_id, int(data.get("complaint_id", 0) or 0))
         elif command == "cancel_complaint":
-            reply, keyboard = "❌ Жалоба отменена.", main_keyboard(user_id in settings.administrators)
+            reply, keyboard = await cancel_user_complaint(user, int(data.get("complaint_id", 0) or 0))
+            if not keyboard:
+                keyboard = main_keyboard(user_id in settings.administrators)
         elif command == "main_menu":
             reply, keyboard = "🏠 Главное меню", main_keyboard(user_id in settings.administrators)
         elif command == "moderation_queue" or text == "🛡 Очередь модерации":
