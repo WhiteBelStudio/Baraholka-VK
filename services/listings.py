@@ -142,13 +142,24 @@ def validate_price(value: str) -> str:
     return result
 
 
+def validate_city(value: str) -> str:
+    city = " ".join((value or "").strip().split())
+    if not city:
+        raise ListingValidationError("Город не может быть пустым")
+    if len(city) < 2:
+        raise ListingValidationError("Название города должно содержать минимум 2 символа")
+    if len(city) > 100:
+        raise ListingValidationError("Название города не должно превышать 100 символов")
+    return city
+
+
 def validate_listing(data: ListingData) -> ListingData:
     return ListingData(
         title=validate_title(data.title),
         category=validate_category(data.category),
         description=validate_description(data.description),
         price=validate_price(data.price),
-        city=_clean(data.city, "city", 100),
+        city=validate_city(data.city),
     )
 
 
