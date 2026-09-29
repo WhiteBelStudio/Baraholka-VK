@@ -54,12 +54,27 @@ CREATE TABLE IF NOT EXISTS moderation_logs (
     FOREIGN KEY(listing_id) REFERENCES listings(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS complaints (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    listing_id INTEGER NOT NULL,
+    reporter_user_id INTEGER NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(listing_id) REFERENCES listings(id) ON DELETE CASCADE,
+    FOREIGN KEY(reporter_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_users_blocked ON users(is_blocked);
 CREATE INDEX IF NOT EXISTS idx_listings_user_status ON listings(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_listings_status ON listings(status);
 CREATE INDEX IF NOT EXISTS idx_listings_city ON listings(city);
 CREATE INDEX IF NOT EXISTS idx_listing_photos_listing ON listing_photos(listing_id, position);
 CREATE INDEX IF NOT EXISTS idx_moderation_logs_listing ON moderation_logs(listing_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_complaints_status ON complaints(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_complaints_listing ON complaints(listing_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_complaints_reporter ON complaints(reporter_user_id, created_at);
 """
 
 
@@ -100,21 +115,11 @@ async def fetch_all(query: str, parameters: tuple[Any, ...] = ()) -> list[aiosql
         return await cursor.fetchall()
 
 
-async def create_or_update_user(
-    vk_user_id: int,
-    first_name: str | None = None,
-    last_name: str | None = None,
-) -> int:
+async def create_or_update_user(vk_user_id: int, first_name: str | None = None, last_name: str | None = None) -> int:
     async with await get_db() as db:
         await db.execute(
-            """
-            INSERT INTO users (vk_user_id, first_name, last_name)
-            VALUES (?, ?, ?)
-            ON CONFLICT(vk_user_id) DO UPDATE SET
-                first_name = excluded.first_name,
-                last_name = excluded.last_name,
-                updated_at = CURRENT_TIMESTAMP
-            """,
+            """INSERT INTO users (vk_user_id, first_name, last_name) VALUES (?, ?, ?)
+            ON CONFLICT(vk_user_id) DO UPDATE SET first_name=excluded.first_name, last_name=excluded.last_name, updated_at=CURRENT_TIMESTAMP""",
             (vk_user_id, first_name, last_name),
         )
         await db.commit()
@@ -130,10 +135,7 @@ async def get_user_by_vk_id(vk_user_id: int) -> aiosqlite.Row | None:
 
 
 async def set_user_blocked(vk_user_id: int, blocked: bool) -> None:
-    await execute(
-        "UPDATE users SET is_blocked = ?, updated_at = CURRENT_TIMESTAMP WHERE vk_user_id = ?",
-        (int(blocked), vk_user_id),
-    )
+    await execute("UPDATE users SET is_blocked = ?, updated_at = CURRENT_TIMESTAMP WHERE vk_user_id = ?", (int(blocked), vk_user_id))
 
 
 async def create_listing(user_id: int) -> int:
@@ -150,75 +152,42 @@ async def get_listing(listing_id: int) -> aiosqlite.Row | None:
 
 
 async def get_listing_for_user(listing_id: int, user_id: int) -> aiosqlite.Row | None:
-    return await fetch_one(
-        "SELECT * FROM listings WHERE id = ? AND user_id = ?",
-        (listing_id, user_id),
-    )
+    return await fetch_one("SELECT * FROM listings WHERE id = ? AND user_id = ?", (listing_id, user_id))
 
 
 async def get_user_listings(user_id: int, statuses: tuple[str, ...] | None = None) -> list[aiosqlite.Row]:
     if not statuses:
-        return await fetch_all(
-            "SELECT * FROM listings WHERE user_id = ? ORDER BY id DESC",
-            (user_id,),
-        )
+        return await fetch_all("SELECT * FROM listings WHERE user_id = ? ORDER BY id DESC", (user_id,))
     placeholders = ",".join("?" for _ in statuses)
-    return await fetch_all(
-        f"SELECT * FROM listings WHERE user_id = ? AND status IN ({placeholders}) ORDER BY id DESC",
-        (user_id, *statuses),
-    )
+    return await fetch_all(f"SELECT * FROM listings WHERE user_id = ? AND status IN ({placeholders}) ORDER BY id DESC", (user_id, *statuses))
 
 
 async def get_listings_by_status(status: str) -> list[aiosqlite.Row]:
-    return await fetch_all(
-        "SELECT * FROM listings WHERE status = ? ORDER BY id ASC",
-        (status,),
-    )
+    return await fetch_all("SELECT * FROM listings WHERE status = ? ORDER BY id ASC", (status,))
 
 
 async def update_listing(listing_id: int, **fields: Any) -> None:
-    allowed = {
-        "title",
-        "category",
-        "description",
-        "price",
-        "city",
-        "status",
-        "editing_field",
-        "published_post_id",
-    }
+    allowed = {"title", "category", "description", "price", "city", "status", "editing_field", "published_post_id"}
     changes = [(key, value) for key, value in fields.items() if key in allowed]
     if not changes:
         return
-
     assignments = ", ".join(f"{key} = ?" for key, _ in changes)
     values = [value for _, value in changes]
     values.append(listing_id)
-    await execute(
-        f"UPDATE listings SET {assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        tuple(values),
-    )
+    await execute(f"UPDATE listings SET {assignments}, updated_at = CURRENT_TIMESTAMP WHERE id = ?", tuple(values))
 
 
 async def delete_listing(listing_id: int, user_id: int | None = None) -> bool:
     if user_id is None:
-        query = "DELETE FROM listings WHERE id = ?"
-        params = (listing_id,)
+        query, params = "DELETE FROM listings WHERE id = ?", (listing_id,)
     else:
-        query = "DELETE FROM listings WHERE id = ? AND user_id = ?"
-        params = (listing_id, user_id)
+        query, params = "DELETE FROM listings WHERE id = ? AND user_id = ?", (listing_id, user_id)
     return await execute(query, params) > 0
 
 
 async def add_listing_photo(listing_id: int, vk_attachment: str, position: int = 0) -> int:
     async with await get_db() as db:
-        cursor = await db.execute(
-            """
-            INSERT INTO listing_photos (listing_id, vk_attachment, position)
-            VALUES (?, ?, ?)
-            """,
-            (listing_id, vk_attachment, position),
-        )
+        cursor = await db.execute("INSERT INTO listing_photos (listing_id, vk_attachment, position) VALUES (?, ?, ?)", (listing_id, vk_attachment, position))
         await db.commit()
         if cursor.lastrowid is None:
             raise RuntimeError("Failed to add listing photo")
@@ -226,19 +195,14 @@ async def add_listing_photo(listing_id: int, vk_attachment: str, position: int =
 
 
 async def get_listing_photos(listing_id: int) -> list[aiosqlite.Row]:
-    return await fetch_all(
-        "SELECT * FROM listing_photos WHERE listing_id = ? ORDER BY position, id",
-        (listing_id,),
-    )
+    return await fetch_all("SELECT * FROM listing_photos WHERE listing_id = ? ORDER BY position, id", (listing_id,))
 
 
 async def delete_listing_photo(photo_id: int, listing_id: int | None = None) -> bool:
     if listing_id is None:
-        query = "DELETE FROM listing_photos WHERE id = ?"
-        params = (photo_id,)
+        query, params = "DELETE FROM listing_photos WHERE id = ?", (photo_id,)
     else:
-        query = "DELETE FROM listing_photos WHERE id = ? AND listing_id = ?"
-        params = (photo_id, listing_id)
+        query, params = "DELETE FROM listing_photos WHERE id = ? AND listing_id = ?", (photo_id, listing_id)
     return await execute(query, params) > 0
 
 
@@ -246,16 +210,36 @@ async def clear_listing_photos(listing_id: int) -> int:
     return await execute("DELETE FROM listing_photos WHERE listing_id = ?", (listing_id,))
 
 
-async def add_moderation_log(
-    listing_id: int,
-    admin_vk_user_id: int,
-    action: str,
-    reason: str | None = None,
-) -> None:
-    await execute(
-        """
-        INSERT INTO moderation_logs (listing_id, admin_vk_user_id, action, reason)
-        VALUES (?, ?, ?, ?)
-        """,
-        (listing_id, admin_vk_user_id, action, reason),
-    )
+async def add_moderation_log(listing_id: int, admin_vk_user_id: int, action: str, reason: str | None = None) -> None:
+    await execute("INSERT INTO moderation_logs (listing_id, admin_vk_user_id, action, reason) VALUES (?, ?, ?, ?)", (listing_id, admin_vk_user_id, action, reason))
+
+
+async def create_complaint(listing_id: int, reporter_user_id: int) -> int:
+    existing = await fetch_one("SELECT id FROM complaints WHERE listing_id = ? AND reporter_user_id = ? AND status IN ('pending','pending_reason') ORDER BY id DESC LIMIT 1", (listing_id, reporter_user_id))
+    if existing:
+        return int(existing["id"])
+    async with await get_db() as db:
+        cursor = await db.execute("INSERT INTO complaints (listing_id, reporter_user_id, reason, status) VALUES (?, ?, '', 'pending_reason')", (listing_id, reporter_user_id))
+        await db.commit()
+        return int(cursor.lastrowid)
+
+
+async def get_pending_complaint(reporter_user_id: int) -> aiosqlite.Row | None:
+    return await fetch_one("SELECT * FROM complaints WHERE reporter_user_id = ? AND status = 'pending_reason' ORDER BY id DESC LIMIT 1", (reporter_user_id,))
+
+
+async def finish_complaint(complaint_id: int, reporter_user_id: int, reason: str) -> bool:
+    return await execute("UPDATE complaints SET reason = ?, status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND reporter_user_id = ? AND status = 'pending_reason'", (reason, complaint_id, reporter_user_id)) > 0
+
+
+async def get_complaint(complaint_id: int) -> aiosqlite.Row | None:
+    return await fetch_one("SELECT * FROM complaints WHERE id = ?", (complaint_id,))
+
+
+async def get_pending_complaints() -> list[aiosqlite.Row]:
+    return await fetch_all("SELECT c.*, l.title, l.status AS listing_status FROM complaints c JOIN listings l ON l.id = c.listing_id WHERE c.status = 'pending' ORDER BY c.id ASC")
+
+
+async def complaint_exists_for_user(listing_id: int, reporter_user_id: int) -> bool:
+    row = await fetch_one("SELECT id FROM complaints WHERE listing_id = ? AND reporter_user_id = ? AND status IN ('pending','resolved','rejected') ORDER BY id DESC LIMIT 1", (listing_id, reporter_user_id))
+    return row is not None
