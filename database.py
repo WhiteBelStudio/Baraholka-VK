@@ -215,7 +215,8 @@ async def get_listings_by_status(status: str) -> list[aiosqlite.Row]:
 
 async def archive_listing(listing_id: int) -> bool:
     return await execute(
-        "UPDATE listings SET status = 'archived', updated_at = CURRENT_TIMESTAMP "
+        "UPDATE listings SET status = 'archived', published_post_id = NULL, "
+        "updated_at = CURRENT_TIMESTAMP "
         "WHERE id = ? AND status IN ('approved', 'published', 'rejected')",
         (listing_id,),
     ) > 0
@@ -223,7 +224,8 @@ async def archive_listing(listing_id: int) -> bool:
 
 async def restore_archived_listing(listing_id: int) -> bool:
     return await execute(
-        "UPDATE listings SET status = 'approved', updated_at = CURRENT_TIMESTAMP "
+        "UPDATE listings SET status = 'approved', published_post_id = NULL, "
+        "updated_at = CURRENT_TIMESTAMP "
         "WHERE id = ? AND status = 'archived'",
         (listing_id,),
     ) > 0
