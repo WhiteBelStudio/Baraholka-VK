@@ -9,7 +9,7 @@ from fastapi.responses import PlainTextResponse
 
 from config import settings
 from database import add_admin_action_log, check_rate_limit, clear_filter_session, clear_search_session, create_or_update_user, get_user_by_vk_id, has_filter_session, has_search_session, init_db, set_user_blocked
-from handlers.moderation import open_moderation_listing, show_moderation_queue
+from handlers.moderation import archive_listing_for_admin, open_archived_listing, open_moderation_listing, show_archive, show_archived_listings, show_moderation_queue, restore_listing_for_admin
 from handlers.complaints import (
     cancel_user_complaint,
     handle_complaint_reason,
@@ -218,6 +218,14 @@ async def vk_callback(request: Request) -> str:
                 reply, keyboard = format_statistics(stats), main_keyboard(settings.role_for(user_id))
         elif command == "moderation_queue" or text == "🛡 Очередь модерации":
             reply, keyboard = await show_moderation_queue(user_id)
+        elif command == "archive" or text == "🗄 Архив":
+            reply, keyboard = await show_archive(user_id)
+        elif command == "archive_listing":
+            reply, keyboard = await archive_listing_for_admin(int(data.get("listing_id", 0) or 0), user_id, vk)
+        elif command == "open_archived":
+            reply, keyboard = await open_archived_listing(user_id, int(data.get("listing_id", 0) or 0))
+        elif command == "restore_listing":
+            reply, keyboard = await restore_listing_for_admin(int(data.get("listing_id", 0) or 0), user_id)
         elif command == "open_moderation":
             reply, keyboard = await open_moderation_listing(user_id, int(data.get("listing_id", 0) or 0))
         elif text.lower() == START_BUTTON.lower() or command == "create_listing":
