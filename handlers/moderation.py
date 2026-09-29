@@ -7,7 +7,7 @@ from services.listings import list_moderation_queue
 
 
 def _is_admin(vk_user_id: int) -> bool:
-    return vk_user_id in settings.administrators
+    return settings.can_moderate(vk_user_id)
 
 
 async def show_moderation_queue(vk_user_id: int) -> tuple[str, dict]:
