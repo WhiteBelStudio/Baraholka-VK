@@ -38,3 +38,29 @@ def listing_preview_keyboard() -> dict[str, Any]:
             _button("❌ Отмена", "cancel_listing", "secondary"),
         ]],
     }
+
+
+def listing_edit_keyboard() -> dict[str, Any]:
+    return {
+        "one_time": False,
+        "inline": False,
+        "buttons": [
+            [
+                _button("📝 Название", "edit_title", "secondary"),
+                _button("🏷 Категория", "edit_category", "secondary"),
+            ],
+            [
+                _button("📄 Описание", "edit_description", "secondary"),
+                _button("💰 Цена", "edit_price", "secondary"),
+            ],
+            [
+                _button("📍 Город", "edit_city", "secondary"),
+            ],
+            [
+                _button("👀 Вернуться к предпросмотру", "listing_preview", "primary"),
+            ],
+            [
+                _button("❌ Отмена", "cancel_listing", "secondary"),
+            ],
+        ],
+    }
