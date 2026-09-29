@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
 from config import settings
-from database import add_admin_action_log, check_rate_limit, create_or_update_user, get_user_by_vk_id, init_db, set_user_blocked
+from database import add_admin_action_log, check_rate_limit, clear_search_session, create_or_update_user, get_user_by_vk_id, has_search_session, init_db, set_user_blocked
 from handlers.moderation import open_moderation_listing, show_moderation_queue
 from handlers.complaints import (
     cancel_user_complaint,
@@ -23,6 +23,7 @@ from keyboards.main import main_keyboard
 from services.moderation import submit_listing_for_moderation
 from services.rate_limit import check_publication_submission
 from services.rules import POLICY_TEXT, RULES_TEXT
+from services.search import format_search_results, search_listings, start_search
 from services.statistics import format_statistics, get_statistics
 from services.vk import VKClient, VKAPIError
 
@@ -122,7 +123,20 @@ async def vk_callback(request: Request) -> str:
             await vk.send_message(user_id, "Ваш аккаунт заблокирован и не может использовать барахолку.")
             return "ok"
 
-        if text.lower() in {"/start", "начать"}:
+        if command == "search":
+            await start_search(user_id)
+            await vk.send_message(user_id, "🔎 Введите запрос для поиска: название, категорию, описание, цену или город.")
+            return "ok"
+
+        if await has_search_session(user_id):
+            if text.lower() in {"отмена", "/cancel", "❌ отмена"}:
+                await clear_search_session(user_id)
+                reply, keyboard = "❌ Поиск отменён.", main_keyboard(settings.role_for(user_id))
+            else:
+                results = await search_listings(text)
+                await clear_search_session(user_id)
+                reply, keyboard = format_search_results(results, text), main_keyboard(settings.role_for(user_id))
+        elif text.lower() in {"/start", "начать"}:
             await vk.send_message(
                 user_id,
                 "Привет! Добро пожаловать в Барахолку VK.\n\nЗдесь можно подать объявление на модерацию.",
