@@ -113,6 +113,9 @@ CREATE TABLE IF NOT EXISTS filter_sessions (
     vk_user_id INTEGER PRIMARY KEY,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS idx_listings_status_updated ON listings(status, updated_at);
+CREATE INDEX IF NOT EXISTS idx_listings_archived ON listings(status, updated_at);
 """
 
 
