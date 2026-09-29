@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from database import (
     add_listing_photo,
@@ -105,12 +107,47 @@ def validate_description(value: str) -> str:
     return description
 
 
+_PRICE_RE = re.compile(r"^(?:\d+(?:[.,]\d{1,2})?|\d{1,3}(?:[\s.]\d{3})+(?:,\d{1,2})?)\s*(?:₽|руб\.?|р\.?)?$", re.IGNORECASE)
+
+
+def validate_price(value: str) -> str:
+    raw = " ".join((value or "").strip().split())
+    if not raw:
+        raise ListingValidationError("Цена не может быть пустой")
+
+    # Accept: 199, 199.99, 199,99, 199.99₽, 199,99 руб., 1 999.50₽.
+    if not _PRICE_RE.fullmatch(raw):
+        raise ListingValidationError(
+            "Введите корректную цену: например 199₽, 199.99₽ или 199,99 руб."
+        )
+
+    normalized = re.sub(r"(?:₽|руб\.?|р\.?)\s*$", "", raw, flags=re.IGNORECASE).strip()
+    normalized = normalized.replace(" ", "")
+    if "." in normalized and "," in normalized:
+        raise ListingValidationError("Используйте одну десятичную запятую или точку")
+    normalized = normalized.replace(",", ".")
+
+    try:
+        amount = Decimal(normalized).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except InvalidOperation as exc:
+        raise ListingValidationError("Не удалось распознать цену") from exc
+
+    if amount <= 0:
+        raise ListingValidationError("Цена должна быть больше 0")
+    if amount > Decimal("999999999.99"):
+        raise ListingValidationError("Цена слишком большая")
+
+    # Store a canonical numeric representation without forcing .00 for whole rubles.
+    result = format(amount, "f").rstrip("0").rstrip(".")
+    return result
+
+
 def validate_listing(data: ListingData) -> ListingData:
     return ListingData(
         title=validate_title(data.title),
         category=validate_category(data.category),
         description=validate_description(data.description),
-        price=_clean(data.price, "price", 50),
+        price=validate_price(data.price),
         city=_clean(data.city, "city", 100),
     )
 
@@ -131,6 +168,8 @@ def validate_field(field: str, value: str) -> str:
         return validate_category(value)
     if field == "description":
         return validate_description(value)
+    if field == "price":
+        return validate_price(value)
     if field not in FIELD_LIMITS:
         raise ListingValidationError(f"Unsupported listing field: {field}")
     return _clean(value, field, FIELD_LIMITS[field])
