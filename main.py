@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+import asyncio
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
@@ -20,6 +21,7 @@ from handlers.complaints import (
 )
 from handlers.listings import START_BUTTON, MY_LISTINGS_BUTTON, handle_listing_message, open_listing_editor, open_my_listing, select_edit_field, show_my_listings, start_listing
 from keyboards.main import main_keyboard
+from services.cleanup import cleanup_loop
 from services.moderation import submit_listing_for_moderation
 from services.rate_limit import check_publication_submission
 from services.rules import POLICY_TEXT, RULES_TEXT
@@ -269,10 +271,27 @@ async def vk_callback(request: Request) -> str:
     return "ok"
 
 
+cleanup_task: asyncio.Task | None = None
+
+
 @app.on_event("startup")
 async def startup_event() -> None:
+    global cleanup_task
     await init_db()
+    cleanup_task = asyncio.create_task(cleanup_loop())
     logger.info("Baraholka VK Callback API initialized")
+
+
+@app.on_event("shutdown")
+async def shutdown_event() -> None:
+    global cleanup_task
+    if cleanup_task is not None:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
+        cleanup_task = None
 
 
 if __name__ == "__main__":
