@@ -22,7 +22,7 @@ from handlers.listings import START_BUTTON, MY_LISTINGS_BUTTON, handle_listing_m
 from keyboards.main import main_keyboard
 from services.moderation import submit_listing_for_moderation
 from services.rate_limit import check_publication_submission
-from services.rules import RULES_TEXT
+from services.rules import POLICY_TEXT, RULES_TEXT
 from services.vk import VKClient, VKAPIError
 
 logger = logging.getLogger(__name__)
@@ -158,6 +158,8 @@ async def vk_callback(request: Request) -> str:
             reply, keyboard = "🏠 Главное меню", main_keyboard(settings.role_for(user_id))
         elif command == "rules" or text == "📋 Правила":
             reply, keyboard = RULES_TEXT, main_keyboard(settings.role_for(user_id))
+        elif command == "policy":
+            reply, keyboard = POLICY_TEXT, main_keyboard(settings.role_for(user_id))
         elif command == "moderation_queue" or text == "🛡 Очередь модерации":
             reply, keyboard = await show_moderation_queue(user_id)
         elif command == "open_moderation":
