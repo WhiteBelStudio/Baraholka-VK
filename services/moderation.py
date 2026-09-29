@@ -4,7 +4,7 @@ import json
 from typing import Any
 
 from config import settings
-from database import add_moderation_log, get_listing, get_listing_photos, get_user_by_vk_id, get_user_listings
+from database import add_admin_action_log, add_moderation_log, archive_listing, get_archived_listings, get_listing, get_listing_photos, get_user_by_vk_id, get_user_listings, restore_archived_listing
 from services.listings import ListingStatus, ListingValidationError, set_listing_status, submit_for_moderation
 from services.vk import VKClient
 
@@ -111,3 +111,51 @@ async def log_moderation_action(
     reason: str | None = None,
 ) -> None:
     await add_moderation_log(listing_id, admin_vk_user_id, action, reason)
+
+
+async def archive_listing_for_admin(listing_id: int, admin_vk_user_id: int, vk: VKClient) -> tuple[str, dict[str, Any]]:
+    if not settings.can_moderate(admin_vk_user_id):
+        return "⛔ У вас нет прав для архивирования.", {}
+
+    listing = await get_listing(listing_id)
+    if listing is None:
+        return "⚠️ Объявление не найдено.", {}
+
+    if listing["status"] not in {ListingStatus.APPROVED, ListingStatus.PUBLISHED, ListingStatus.REJECTED}:
+        return "⚠️ Это объявление нельзя отправить в архив в текущем статусе.", {}
+
+    if listing["status"] == ListingStatus.PUBLISHED and listing["published_post_id"]:
+        try:
+            await vk.call(
+                "wall.delete",
+                owner_id=-settings.vk_group_id,
+                post_id=int(listing["published_post_id"]),
+            )
+        except Exception:
+            return "⚠️ Не удалось удалить опубликованную запись VK. Объявление оставлено без изменений.", {}
+
+    if not await archive_listing(listing_id):
+        return "⚠️ Не удалось переместить объявление в архив.", {}
+
+    await add_moderation_log(listing_id, admin_vk_user_id, "archived")
+    await add_admin_action_log(admin_vk_user_id, "listing_archived", listing_id=listing_id)
+    try:
+        await vk.send_message(
+            int((await get_user_by_vk_id(int(listing["user_id"])))["vk_user_id"]),
+            f"🗄 Объявление №{listing_id} перемещено в архив администрацией.",
+        )
+    except Exception:
+        pass
+    return f"🗄 Объявление №{listing_id} перемещено в архив.", {}
+
+
+async def restore_listing_for_admin(listing_id: int, admin_vk_user_id: int) -> tuple[str, dict[str, Any]]:
+    if not settings.can_moderate(admin_vk_user_id):
+        return "⛔ У вас нет прав для восстановления.", {}
+
+    if not await restore_archived_listing(listing_id):
+        return "⚠️ Архивное объявление не найдено.", {}
+
+    await add_moderation_log(listing_id, admin_vk_user_id, "restored")
+    await add_admin_action_log(admin_vk_user_id, "listing_restored", listing_id=listing_id)
+    return f"♻️ Объявление №{listing_id} восстановлено.", {}
