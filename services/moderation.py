@@ -200,6 +200,9 @@ async def handle_rejection_reason(
     if session is None:
         return "", {}
 
+    if (text or "").strip().lower() in {"отмена", "/cancel", "❌ отмена"}:
+        await clear_rejection_session(admin_vk_user_id)
+        return "❌ Отклонение отменено.", {}
     listing_id = int(session["listing_id"])
     return await reject_listing_for_admin(listing_id, admin_vk_user_id, text, vk)
 
