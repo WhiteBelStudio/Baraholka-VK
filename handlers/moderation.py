@@ -29,7 +29,7 @@ async def show_moderation_queue(vk_user_id: int) -> tuple[str, dict]:
         lines.append(f"• №{listing['id']} — {title} — {listing['price']} ₽")
 
     lines.extend(["", "Нажмите кнопку ниже, чтобы обновить очередь."])
-    return "\n".join(lines), moderation_queue_keyboard()
+    return "\n".join(lines), moderation_queue_keyboard([int(item["id"]) for item in listings])
 
 
 async def open_moderation_listing(
