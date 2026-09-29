@@ -227,6 +227,19 @@ async def add_moderation_log(listing_id: int, admin_vk_user_id: int, action: str
     await execute("INSERT INTO moderation_logs (listing_id, admin_vk_user_id, action, reason) VALUES (?, ?, ?, ?)", (listing_id, admin_vk_user_id, action, reason))
 
 
+async def add_admin_action_log(
+    admin_vk_user_id: int,
+    action: str,
+    target_vk_user_id: int | None = None,
+    listing_id: int | None = None,
+    details: str | None = None,
+) -> None:
+    await execute(
+        "INSERT INTO admin_action_logs (admin_vk_user_id, action, target_vk_user_id, listing_id, details) VALUES (?, ?, ?, ?, ?)",
+        (admin_vk_user_id, action, target_vk_user_id, listing_id, details),
+    )
+
+
 async def create_complaint(listing_id: int, reporter_user_id: int) -> int:
     existing = await fetch_one(
         "SELECT id FROM complaints WHERE listing_id = ? AND reporter_user_id = ? AND status = 'pending_reason' ORDER BY id DESC LIMIT 1",
