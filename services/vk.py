@@ -38,6 +38,7 @@ class VKClient:
         user_id: int,
         message: str,
         keyboard: dict[str, Any] | None = None,
+        attachments: str | None = None,
     ) -> int:
         params: dict[str, Any] = {
             "peer_id": user_id,
@@ -46,6 +47,8 @@ class VKClient:
         }
         if keyboard:
             params["keyboard"] = json.dumps(keyboard, ensure_ascii=False)
+        if attachments:
+            params["attachment"] = attachments
         result = await self.call("messages.send", **params)
         return int(result)
 
