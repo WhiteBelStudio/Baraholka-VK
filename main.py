@@ -148,10 +148,16 @@ async def vk_callback(request: Request) -> str:
             )
             return "ok"
 
-        rejection_reply, rejection_keyboard = await handle_rejection_reason(user_id, text, vk)
-        if rejection_reply:
-            await vk.send_message(user_id, rejection_reply, keyboard=rejection_keyboard)
-            return "ok"
+        if not command:
+            if text.lower() in {"отмена", "/cancel", "❌ отмена"}:
+                from database import clear_rejection_session
+                rejection_session = await clear_rejection_session(user_id)
+                if rejection_session is None:
+                    pass
+            rejection_reply, rejection_keyboard = await handle_rejection_reason(user_id, text, vk)
+            if rejection_reply:
+                await vk.send_message(user_id, rejection_reply, keyboard=rejection_keyboard)
+                return "ok"
 
         session_handled = False
         if await has_search_session(user_id):
