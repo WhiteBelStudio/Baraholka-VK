@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     spam_window_seconds: int = Field(default=10, ge=1, le=300)
     spam_max_messages: int = Field(default=8, ge=1, le=100)
     spam_cooldown_seconds: int = Field(default=30, ge=1, le=3600)
+    publication_window_seconds: int = Field(default=3600, ge=60, le=86400)
+    publication_max_count: int = Field(default=3, ge=1, le=50)
+    publication_cooldown_seconds: int = Field(default=3600, ge=60, le=86400)
 
     model_config = SettingsConfigDict(
         env_file=".env",
