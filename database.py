@@ -75,6 +75,19 @@ CREATE INDEX IF NOT EXISTS idx_moderation_logs_listing ON moderation_logs(listin
 CREATE INDEX IF NOT EXISTS idx_complaints_status ON complaints(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_complaints_listing ON complaints(listing_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_complaints_reporter ON complaints(reporter_user_id, created_at);
+
+CREATE TABLE IF NOT EXISTS admin_action_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    admin_vk_user_id INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    target_vk_user_id INTEGER,
+    listing_id INTEGER,
+    details TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_action_logs_created ON admin_action_logs(created_at);
+
 """
 
 
