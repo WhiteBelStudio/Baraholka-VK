@@ -95,6 +95,15 @@ CREATE TABLE IF NOT EXISTS user_rate_limits (
     blocked_until REAL NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS publication_rate_limits (
+    vk_user_id INTEGER PRIMARY KEY,
+    window_started_at REAL NOT NULL,
+    publication_count INTEGER NOT NULL DEFAULT 0,
+    blocked_until REAL NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_publication_rate_limits_blocked ON publication_rate_limits(blocked_until);
+
 """
 
 
@@ -357,6 +366,59 @@ async def check_rate_limit(
 
         await db.execute(
             "UPDATE user_rate_limits SET message_count = message_count + 1 WHERE vk_user_id = ?",
+            (vk_user_id,),
+        )
+        await db.commit()
+        return True, 0
+
+
+async def check_publication_rate_limit(
+    vk_user_id: int,
+    now: float,
+    window_seconds: int,
+    max_publications: int,
+    cooldown_seconds: int,
+) -> tuple[bool, int]:
+    async with await get_db() as db:
+        cursor = await db.execute(
+            "SELECT window_started_at, publication_count, blocked_until FROM publication_rate_limits WHERE vk_user_id = ?",
+            (vk_user_id,),
+        )
+        row = await cursor.fetchone()
+        if row is None:
+            await db.execute(
+                "INSERT INTO publication_rate_limits (vk_user_id, window_started_at, publication_count, blocked_until) VALUES (?, ?, 1, 0)",
+                (vk_user_id, now),
+            )
+            await db.commit()
+            return True, 0
+
+        window_started = float(row["window_started_at"])
+        count = int(row["publication_count"])
+        blocked_until = float(row["blocked_until"])
+
+        if blocked_until > now:
+            return False, max(1, int(blocked_until - now + 0.999))
+
+        if now - window_started >= window_seconds:
+            await db.execute(
+                "UPDATE publication_rate_limits SET window_started_at = ?, publication_count = 1, blocked_until = 0 WHERE vk_user_id = ?",
+                (now, vk_user_id),
+            )
+            await db.commit()
+            return True, 0
+
+        if count >= max_publications:
+            new_blocked_until = now + cooldown_seconds
+            await db.execute(
+                "UPDATE publication_rate_limits SET blocked_until = ? WHERE vk_user_id = ?",
+                (new_blocked_until, vk_user_id),
+            )
+            await db.commit()
+            return False, cooldown_seconds
+
+        await db.execute(
+            "UPDATE publication_rate_limits SET publication_count = publication_count + 1 WHERE vk_user_id = ?",
             (vk_user_id,),
         )
         await db.commit()
