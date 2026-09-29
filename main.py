@@ -21,6 +21,7 @@ from handlers.complaints import (
 )
 from handlers.listings import START_BUTTON, MY_LISTINGS_BUTTON, cancel_delete_my_listing, confirm_delete_my_listing, handle_listing_message, open_listing_editor, open_my_listing, request_delete_my_listing, select_edit_field, show_my_listings, start_listing
 from keyboards.main import main_keyboard
+from handlers.admin import show_admin_menu
 from services.cleanup import cleanup_loop
 from services.moderation import approve_listing_for_admin, handle_rejection_reason, start_rejection_for_admin, submit_listing_for_moderation
 from services.rate_limit import check_publication_submission
@@ -219,6 +220,8 @@ async def vk_callback(request: Request) -> str:
             reply, keyboard = await cancel_user_complaint(user, int(data.get("complaint_id", 0) or 0))
             if not keyboard:
                 keyboard = main_keyboard(settings.role_for(user_id))
+        elif command == "admin_panel":
+            reply, keyboard = await show_admin_menu(user_id)
         elif command == "main_menu":
             reply, keyboard = "🏠 Главное меню", main_keyboard(settings.role_for(user_id))
         elif command == "rules" or text == "📋 Правила":
