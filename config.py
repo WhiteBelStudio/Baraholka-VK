@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     support_ids: str = ""
     database_path: str = "data/baraholka.db"
     log_level: str = "INFO"
+    spam_window_seconds: int = Field(default=10, ge=1, le=300)
+    spam_max_messages: int = Field(default=8, ge=1, le=100)
+    spam_cooldown_seconds: int = Field(default=30, ge=1, le=3600)
 
     model_config = SettingsConfigDict(
         env_file=".env",
