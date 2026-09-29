@@ -39,6 +39,8 @@ def listing_detail_keyboard(listing_id: int, status: str) -> dict[str, Any]:
         buttons.append([_button("✏️ Редактировать", "edit_listing", "secondary")])
     if status in {"approved", "published", "rejected", "archived"}:
         buttons.append([_button("🗑 Удалить объявление", "delete_my_listing", "negative", {"listing_id": listing_id})])
+    if status in {"approved", "published", "archived"}:
+        buttons.append([_button("🚨 Пожаловаться", "start_complaint", "negative", {"listing_id": listing_id})])
     buttons.append([_button("⬅️ Мои объявления", "my_listings", "secondary")])
     return {"one_time": False, "inline": False, "buttons": buttons}
 
