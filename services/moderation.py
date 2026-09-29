@@ -78,6 +78,8 @@ async def submit_listing_for_moderation(user_id: int, vk: VKClient) -> tuple[str
     sent = 0
     attachments = ",".join(str(photo["vk_attachment"]) for photo in photos)
     for admin_id in sorted(settings.administrators):
+        if not settings.can_moderate(admin_id):
+            continue
         try:
             await vk.send_message(
                 admin_id,
