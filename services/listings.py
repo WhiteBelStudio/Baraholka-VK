@@ -64,17 +64,28 @@ class ListingData:
 
 
 def _clean(value: str, field: str, max_length: int = 2000) -> str:
-    value = (value or "").strip()
+    value = " ".join((value or "").strip().split())
     if not value:
         raise ListingValidationError(f"{field} must not be empty")
     if len(value) > max_length:
-        raise ListingValidationError(f"{field} is too long")
+        raise ListingValidationError(f"{field} is too long (maximum {max_length} characters)")
     return value
+
+
+def validate_title(value: str) -> str:
+    title = " ".join((value or "").strip().split())
+    if not title:
+        raise ListingValidationError("Название товара не может быть пустым")
+    if len(title) < 2:
+        raise ListingValidationError("Название товара должно содержать минимум 2 символа")
+    if len(title) > 120:
+        raise ListingValidationError("Название товара не должно превышать 120 символов")
+    return title
 
 
 def validate_listing(data: ListingData) -> ListingData:
     return ListingData(
-        title=_clean(data.title, "title", 120),
+        title=validate_title(data.title),
         category=_clean(data.category, "category", 100),
         description=_clean(data.description, "description", 4000),
         price=_clean(data.price, "price", 50),
@@ -92,6 +103,8 @@ FIELD_LIMITS = {
 
 
 def validate_field(field: str, value: str) -> str:
+    if field == "title":
+        return validate_title(value)
     if field not in FIELD_LIMITS:
         raise ListingValidationError(f"Unsupported listing field: {field}")
     return _clean(value, field, FIELD_LIMITS[field])
