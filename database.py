@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS listings (
     price TEXT NOT NULL DEFAULT '',
     city TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'draft',
+    editing_field TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     published_post_id INTEGER,
@@ -73,6 +74,10 @@ async def get_db() -> aiosqlite.Connection:
 async def init_db() -> None:
     async with await get_db() as db:
         await db.executescript(SCHEMA)
+        columns = await db.execute_fetchall("PRAGMA table_info(listings)")
+        column_names = {row[1] for row in columns}
+        if "editing_field" not in column_names:
+            await db.execute("ALTER TABLE listings ADD COLUMN editing_field TEXT")
         await db.commit()
 
 
@@ -179,6 +184,7 @@ async def update_listing(listing_id: int, **fields: Any) -> None:
         "price",
         "city",
         "status",
+        "editing_field",
         "published_post_id",
     }
     changes = [(key, value) for key, value in fields.items() if key in allowed]
