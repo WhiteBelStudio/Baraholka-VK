@@ -181,6 +181,14 @@ async def handle_listing_message(
     if text.lower() in {CANCEL_BUTTON.lower(), "/cancel", "отмена"}:
         return await cancel_listing(user_id)
 
+    if attachments:
+        drafts_with_media = await get_user_listings(user_id, (ListingStatus.DRAFT,))
+        if drafts_with_media:
+            from services.listings import replace_photos
+            await replace_photos(int(drafts_with_media[0]["id"]), attachments)
+            if not text:
+                return await build_listing_preview(user_id)
+
     if text.lower() == PREVIEW_BUTTON.lower():
         return await build_listing_preview(user_id)
 
