@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
 from config import settings
-from database import add_admin_action_log, check_rate_limit, clear_search_session, create_or_update_user, get_user_by_vk_id, has_search_session, init_db, set_user_blocked
+from database import add_admin_action_log, check_rate_limit, clear_filter_session, clear_search_session, create_or_update_user, get_user_by_vk_id, has_filter_session, has_search_session, init_db, set_user_blocked
 from handlers.moderation import open_moderation_listing, show_moderation_queue
 from handlers.complaints import (
     cancel_user_complaint,
@@ -23,12 +23,20 @@ from keyboards.main import main_keyboard
 from services.moderation import submit_listing_for_moderation
 from services.rate_limit import check_publication_submission
 from services.rules import POLICY_TEXT, RULES_TEXT
-from services.search import format_search_results, search_listings, start_search
+from services.search import (
+    filter_listings,
+    format_filter_results,
+    format_search_results,
+    parse_filter_input,
+    search_listings,
+    start_filter,
+    start_search,
+)
 from services.statistics import format_statistics, get_statistics
 from services.vk import VKClient, VKAPIError
 
 logger = logging.getLogger(__name__)
-app = FastAPI(title="Baraholka VK", version="0.5.2")
+app = FastAPI(title="Baraholka VK", version="0.5.3")
 vk = VKClient()
 
 
@@ -89,10 +97,7 @@ async def vk_callback(request: Request) -> str:
             settings.spam_cooldown_seconds,
         )
         if not allowed:
-            await vk.send_message(
-                user_id,
-                f"⚠️ Слишком много сообщений подряд. Попробуйте снова через {retry_after} сек.",
-            )
+            await vk.send_message(user_id, f"⚠️ Слишком много сообщений подряд. Попробуйте снова через {retry_after} сек.")
             return "ok"
 
         if command in {"ban_user", "unban_user"}:
@@ -124,8 +129,21 @@ async def vk_callback(request: Request) -> str:
             return "ok"
 
         if command == "search":
+            await clear_filter_session(user_id)
             await start_search(user_id)
             await vk.send_message(user_id, "🔎 Введите запрос для поиска: название, категорию, описание, цену или город.")
+            return "ok"
+
+        if command == "filter":
+            await clear_search_session(user_id)
+            await start_filter(user_id)
+            await vk.send_message(
+                user_id,
+                "⚙️ Введите фильтры одной строкой через |\n"
+                "Формат: категория | город | от | до\n"
+                "Пример: телефоны | Белореченск | 1000 | 30000\n"
+                "Если параметр не нужен, поставьте -.",
+            )
             return "ok"
 
         if await has_search_session(user_id):
@@ -136,6 +154,19 @@ async def vk_callback(request: Request) -> str:
                 results = await search_listings(text)
                 await clear_search_session(user_id)
                 reply, keyboard = format_search_results(results, text), main_keyboard(settings.role_for(user_id))
+        elif await has_filter_session(user_id):
+            if text.lower() in {"отмена", "/cancel", "❌ отмена"}:
+                await clear_filter_session(user_id)
+                reply, keyboard = "❌ Фильтрация отменена.", main_keyboard(settings.role_for(user_id))
+            else:
+                try:
+                    category, city, min_price, max_price = parse_filter_input(text)
+                except ValueError as exc:
+                    reply, keyboard = f"⚠️ {exc}\n\nФормат: категория | город | от | до\nПример: телефоны | Белореченск | 1000 | 30000", {}
+                else:
+                    results = await filter_listings(category, city, min_price, max_price)
+                    await clear_filter_session(user_id)
+                    reply, keyboard = format_filter_results(results, category, city, min_price, max_price), main_keyboard(settings.role_for(user_id))
         elif text.lower() in {"/start", "начать"}:
             await vk.send_message(
                 user_id,
@@ -153,10 +184,7 @@ async def vk_callback(request: Request) -> str:
             reply, keyboard = await start_complaint(user, int(data.get("listing_id", 0) or 0))
         elif command == "complaint_reason_mode":
             pending = await handle_complaint_reason(user, "")
-            if pending[0]:
-                reply, keyboard = "📝 Напишите причину жалобы одним сообщением.", {}
-            else:
-                reply, keyboard = "📝 Напишите причину жалобы одним сообщением.", {}
+            reply, keyboard = "📝 Напишите причину жалобы одним сообщением.", {}
         elif command == "complaints_queue":
             reply, keyboard = await show_complaints_queue(user_id)
         elif command == "open_complaint":
@@ -201,6 +229,8 @@ async def vk_callback(request: Request) -> str:
             reply, keyboard = await handle_listing_message(user, "👀 Предпросмотр")
         elif command == "cancel_listing" or text == "❌ Отмена":
             reply, keyboard = await handle_listing_message(user, "❌ Отмена")
+        elif command in {"search", "filter"}:
+            reply, keyboard = "", {}
         else:
             complaint_reply, complaint_keyboard = await handle_complaint_reason(user, text)
             if complaint_reply:
