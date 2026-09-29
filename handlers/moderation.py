@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from config import settings
 from database import get_listing
-from keyboards.admin import moderation_item_keyboard, moderation_queue_keyboard
+from keyboards.admin import archive_keyboard, archived_listing_keyboard, moderation_item_keyboard, moderation_queue_keyboard
 from services.listings import list_moderation_queue
 
 
@@ -53,3 +53,37 @@ async def open_moderation_listing(
         f"Город: {listing['city']}"
     )
     return text, moderation_item_keyboard(listing_id)
+
+
+async def show_archive(vk_user_id: int) -> tuple[str, dict]:
+    if not _is_admin(vk_user_id):
+        return "⛔ У вас нет прав для просмотра архива.", {}
+    from database import get_archived_listings
+    listings = await get_archived_listings()
+    if not listings:
+        return "🗄 Архив объявлений пуст.", archive_keyboard()
+    lines = ["🗄 Архив объявлений", "", f"Всего: {len(listings)}", ""]
+    for item in listings:
+        title = str(item["title"]).strip() or "Без названия"
+        lines.append(f"• №{item['id']} — {title} — {item['price']} ₽")
+    lines.append("")
+    lines.append("Выберите объявление для восстановления через карточку ниже.")
+    return "\n".join(lines), archive_keyboard([int(item["id"]) for item in listings])
+
+
+async def open_archived_listing(vk_user_id: int, listing_id: int) -> tuple[str, dict]:
+    if not _is_admin(vk_user_id):
+        return "⛔ У вас нет прав для просмотра архива.", {}
+    listing = await get_listing(listing_id)
+    if listing is None or listing["status"] != "archived":
+        return "⚠️ Архивное объявление не найдено.", {}
+    text = (
+        "🗄 Архивное объявление\n\n"
+        f"№{listing['id']}\n"
+        f"Название: {listing['title']}\n"
+        f"Категория: {listing['category']}\n"
+        f"Описание: {listing['description']}\n"
+        f"Цена: {listing['price']} ₽\n"
+        f"Город: {listing['city']}"
+    )
+    return text, archived_listing_keyboard(listing_id)
