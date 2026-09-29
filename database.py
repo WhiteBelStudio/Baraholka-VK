@@ -104,6 +104,11 @@ CREATE TABLE IF NOT EXISTS publication_rate_limits (
 
 CREATE INDEX IF NOT EXISTS idx_publication_rate_limits_blocked ON publication_rate_limits(blocked_until);
 
+CREATE TABLE IF NOT EXISTS search_sessions (
+    vk_user_id INTEGER PRIMARY KEY,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 """
 
 
@@ -423,3 +428,18 @@ async def check_publication_rate_limit(
         )
         await db.commit()
         return True, 0
+
+
+async def set_search_session(vk_user_id: int) -> None:
+    await execute(
+        "INSERT INTO search_sessions (vk_user_id) VALUES (?) ON CONFLICT(vk_user_id) DO UPDATE SET created_at=CURRENT_TIMESTAMP",
+        (vk_user_id,),
+    )
+
+
+async def has_search_session(vk_user_id: int) -> bool:
+    return await fetch_one("SELECT vk_user_id FROM search_sessions WHERE vk_user_id = ?", (vk_user_id,)) is not None
+
+
+async def clear_search_session(vk_user_id: int) -> None:
+    await execute("DELETE FROM search_sessions WHERE vk_user_id = ?", (vk_user_id,))
