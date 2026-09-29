@@ -2,8 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from database import delete_listing, get_user_listings, update_listing
-from keyboards.listings import listing_creation_keyboard, listing_edit_keyboard, listing_preview_keyboard, my_listings_keyboard, listing_detail_keyboard
+from database import delete_listing, get_listing_for_user, get_user_listings, update_listing
+from keyboards.listings import (
+    delete_listing_confirm_keyboard,
+    listing_creation_keyboard,
+    listing_detail_keyboard,
+    listing_edit_keyboard,
+    listing_preview_keyboard,
+    my_listings_keyboard,
+)
 from services.listings import ListingStatus, create_draft, get_photos, save_draft_field
 from states import FIELD_PROMPTS, ListingState
 
@@ -16,6 +23,7 @@ _EDIT_FIELDS = {"edit_title": (ListingState.TITLE, "title"), "edit_category": (L
 _ORDER = (ListingState.TITLE, ListingState.CATEGORY, ListingState.DESCRIPTION, ListingState.PRICE, ListingState.CITY)
 _FIELDS = {ListingState.TITLE: "title", ListingState.CATEGORY: "category", ListingState.DESCRIPTION: "description", ListingState.PRICE: "price", ListingState.CITY: "city"}
 _STATUS_LABELS = {ListingStatus.DRAFT: "📝 Черновик", ListingStatus.MODERATION: "🟡 На модерации", ListingStatus.APPROVED: "🟢 Одобрено", ListingStatus.REJECTED: "🔴 Отклонено", ListingStatus.PUBLISHED: "📢 Опубликовано", ListingStatus.ARCHIVED: "📦 В архиве", ListingStatus.DELETED: "🗑 Удалено"}
+_DELETE_ALLOWED = {ListingStatus.APPROVED, ListingStatus.PUBLISHED, ListingStatus.REJECTED, ListingStatus.ARCHIVED}
 
 
 def _next_state(listing: Any) -> ListingState | None:
@@ -44,12 +52,37 @@ async def show_my_listings(user_id: int) -> tuple[str, dict[str, Any]]:
 
 
 async def open_my_listing(user_id: int, listing_id: int) -> tuple[str, dict[str, Any]]:
-    listing = next((x for x in await get_user_listings(user_id) if int(x["id"]) == listing_id), None)
+    listing = await get_listing_for_user(listing_id, user_id)
     if listing is None or listing["status"] == ListingStatus.DELETED:
         return "⚠️ Объявление не найдено или вам недоступно.", {}
     photos = await get_photos(listing_id)
     text = (f"📦 Объявление №{listing['id']}\n\n🛍 {_cut(listing['title'], 120)}\n🏷 {listing['category']}\n\n📝 {_cut(listing['description'], 700)}\n\n💰 {listing['price']} ₽\n📍 {listing['city']}\n{_STATUS_LABELS.get(listing['status'], listing['status'])}\n📷 Фотографий: {len(photos)}")
     return text, listing_detail_keyboard(listing_id, listing["status"])
+
+
+async def request_delete_my_listing(user_id: int, listing_id: int) -> tuple[str, dict[str, Any]]:
+    listing = await get_listing_for_user(listing_id, user_id)
+    if listing is None or listing["status"] == ListingStatus.DELETED:
+        return "⚠️ Объявление не найдено или вам недоступно.", {}
+    if listing["status"] not in _DELETE_ALLOWED:
+        return "⚠️ Это объявление нельзя удалить в текущем статусе.", listing_detail_keyboard(listing_id, listing["status"])
+    return f"⚠️ Вы действительно хотите удалить объявление №{listing_id}?\n\nПосле удаления оно исчезнет из списка ваших объявлений.", delete_listing_confirm_keyboard(listing_id)
+
+
+async def confirm_delete_my_listing(user_id: int, listing_id: int) -> tuple[str, dict[str, Any]]:
+    listing = await get_listing_for_user(listing_id, user_id)
+    if listing is None or listing["status"] == ListingStatus.DELETED:
+        return "⚠️ Объявление уже удалено или вам недоступно.", {}
+    if listing["status"] not in _DELETE_ALLOWED:
+        return "⚠️ Это объявление нельзя удалить в текущем статусе.", listing_detail_keyboard(listing_id, listing["status"])
+    deleted = await delete_listing(listing_id, user_id)
+    if not deleted:
+        return "⚠️ Не удалось удалить объявление. Попробуйте ещё раз.", {}
+    return "🗑 Объявление удалено.\n\nОно больше не отображается в ваших объявлениях.", await show_my_listings(user_id)
+
+
+async def cancel_delete_my_listing(user_id: int, listing_id: int) -> tuple[str, dict[str, Any]]:
+    return await open_my_listing(user_id, listing_id)
 
 
 async def _draft(user_id: int) -> Any:
