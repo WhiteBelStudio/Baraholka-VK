@@ -37,4 +37,4 @@ The service refuses to start when required settings are missing or invalid. `VK_
 
 ## Current stage
 
-Stage 6 (listing system) is complete. The project now has a complete listing data layer and service layer: drafts, ownership checks, CRUD operations, statuses, validation, photos, moderation submission, user listing queries, moderation queue queries, and safe owner-only deletion. Stage 7 (listing creation dialog) is complete. The VK callback now provides a persistent database-backed multi-step dialog for title, manually entered category, description, price, and city, with validation, cancellation, a user keyboard, and draft resume after restart. The next development stage is the individual listing fields and validation UX.
+Stage 8 (product title) is complete. Product names are collected as the first field of the listing dialog, stored in the draft, normalized for excess whitespace, required to contain at least 2 characters, and limited to 120 characters. Invalid titles are rejected with a clear message and the user remains on the title step. The creation flow also has centralized prompts for every listing field.
