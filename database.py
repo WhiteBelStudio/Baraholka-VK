@@ -207,6 +207,29 @@ async def get_listings_by_status(status: str) -> list[aiosqlite.Row]:
     return await fetch_all("SELECT * FROM listings WHERE status = ? ORDER BY id ASC", (status,))
 
 
+async def archive_listing(listing_id: int) -> bool:
+    return await execute(
+        "UPDATE listings SET status = 'archived', updated_at = CURRENT_TIMESTAMP "
+        "WHERE id = ? AND status IN ('approved', 'published', 'rejected')",
+        (listing_id,),
+    ) > 0
+
+
+async def restore_archived_listing(listing_id: int) -> bool:
+    return await execute(
+        "UPDATE listings SET status = 'approved', updated_at = CURRENT_TIMESTAMP "
+        "WHERE id = ? AND status = 'archived'",
+        (listing_id,),
+    ) > 0
+
+
+async def get_archived_listings(limit: int = 50) -> list[aiosqlite.Row]:
+    return await fetch_all(
+        "SELECT * FROM listings WHERE status = 'archived' ORDER BY updated_at DESC, id DESC LIMIT ?",
+        (limit,),
+    )
+
+
 async def update_listing(listing_id: int, **fields: Any) -> None:
     allowed = {"title", "category", "description", "price", "city", "status", "editing_field", "published_post_id"}
     changes = [(key, value) for key, value in fields.items() if key in allowed]
