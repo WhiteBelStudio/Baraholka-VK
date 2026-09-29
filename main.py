@@ -146,7 +146,9 @@ async def vk_callback(request: Request) -> str:
             )
             return "ok"
 
+        session_handled = False
         if await has_search_session(user_id):
+            session_handled = True
             if text.lower() in {"отмена", "/cancel", "❌ отмена"}:
                 await clear_search_session(user_id)
                 reply, keyboard = "❌ Поиск отменён.", main_keyboard(settings.role_for(user_id))
@@ -155,6 +157,7 @@ async def vk_callback(request: Request) -> str:
                 await clear_search_session(user_id)
                 reply, keyboard = format_search_results(results, text), main_keyboard(settings.role_for(user_id))
         elif await has_filter_session(user_id):
+            session_handled = True
             if text.lower() in {"отмена", "/cancel", "❌ отмена"}:
                 await clear_filter_session(user_id)
                 reply, keyboard = "❌ Фильтрация отменена.", main_keyboard(settings.role_for(user_id))
@@ -175,7 +178,9 @@ async def vk_callback(request: Request) -> str:
             )
             return "ok"
 
-        if command == "my_listings" or text == MY_LISTINGS_BUTTON:
+        if session_handled:
+            pass
+        elif command == "my_listings" or text == MY_LISTINGS_BUTTON:
             reply, keyboard = await show_my_listings(user)
         elif command == "open_my_listing":
             listing_id = int(data.get("listing_id", 0) or 0)
