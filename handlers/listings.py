@@ -12,6 +12,7 @@ from keyboards.listings import (
     my_listings_keyboard,
 )
 from services.listings import ListingStatus, create_draft, get_photos, save_draft_field
+from services.vk import VKAPIError, VKClient
 from states import FIELD_PROMPTS, ListingState
 
 START_BUTTON = "🛍 Подать объявление"
@@ -69,12 +70,20 @@ async def request_delete_my_listing(user_id: int, listing_id: int) -> tuple[str,
     return f"⚠️ Вы действительно хотите удалить объявление №{listing_id}?\n\nПосле удаления оно исчезнет из списка ваших объявлений.", delete_listing_confirm_keyboard(listing_id)
 
 
-async def confirm_delete_my_listing(user_id: int, listing_id: int) -> tuple[str, dict[str, Any]]:
+async def confirm_delete_my_listing(user_id: int, listing_id: int, vk: VKClient) -> tuple[str, dict[str, Any]]:
     listing = await get_listing_for_user(listing_id, user_id)
     if listing is None or listing["status"] == ListingStatus.DELETED:
         return "⚠️ Объявление уже удалено или вам недоступно.", {}
     if listing["status"] not in _DELETE_ALLOWED:
         return "⚠️ Это объявление нельзя удалить в текущем статусе.", listing_detail_keyboard(listing_id, listing["status"])
+
+    if listing["status"] == ListingStatus.PUBLISHED and listing["published_post_id"]:
+        try:
+            from config import settings
+            await vk.call("wall.delete", owner_id=-settings.vk_group_id, post_id=int(listing["published_post_id"]))
+        except VKAPIError:
+            return "⚠️ Не удалось удалить опубликованную запись из VK. Объявление не удалено.", listing_detail_keyboard(listing_id, listing["status"])
+
     deleted = await delete_listing(listing_id, user_id)
     if not deleted:
         return "⚠️ Не удалось удалить объявление. Попробуйте ещё раз.", {}
