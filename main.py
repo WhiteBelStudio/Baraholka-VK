@@ -15,6 +15,7 @@ from handlers.listings import (
     start_listing,
 )
 from keyboards.main import main_keyboard
+from services.moderation import submit_listing_for_moderation
 from services.vk import VKClient, VKAPIError
 
 logger = logging.getLogger(__name__)
@@ -103,6 +104,8 @@ async def vk_callback(request: Request) -> str:
             reply, keyboard = await open_listing_editor(user)
         elif command in {"edit_title", "edit_category", "edit_description", "edit_price", "edit_city"}:
             reply, keyboard = await select_edit_field(user, command)
+        elif command == "submit_listing" or text == "🚀 Отправить на модерацию":
+            reply, keyboard = await submit_listing_for_moderation(user_id, vk)
         elif command == "listing_preview" or text == "👀 Предпросмотр":
             reply, keyboard = await handle_listing_message(user, "👀 Предпросмотр")
         elif command == "cancel_listing" or text == "❌ Отмена":
