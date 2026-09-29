@@ -21,7 +21,7 @@ REPORTABLE_STATUSES = {ListingStatus.APPROVED, ListingStatus.PUBLISHED, ListingS
 
 def _is_admin(user_id: int) -> bool:
     from config import settings
-    return user_id in settings.administrators
+    return settings.can_moderate(user_id)
 
 
 async def start_complaint(user_id: int, listing_id: int) -> tuple[str, dict[str, Any]]:
