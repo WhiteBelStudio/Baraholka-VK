@@ -68,6 +68,14 @@ def archive_candidates_keyboard(listing_ids: list[int] | None = None) -> dict[st
     buttons.append([{
         "action": {
             "type": "text",
+            "label": "📦 Открыть архив",
+            "payload": json.dumps({"command": "archive_list"}, ensure_ascii=False),
+        },
+        "color": "primary",
+    }])
+    buttons.append([{
+        "action": {
+            "type": "text",
             "label": "🔄 Обновить",
             "payload": json.dumps({"command": "archive"}, ensure_ascii=False),
         },
