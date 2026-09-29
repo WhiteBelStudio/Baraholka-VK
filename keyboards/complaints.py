@@ -19,7 +19,6 @@ def complaint_confirm_keyboard(listing_id: int, complaint_id: int) -> dict[str, 
         "one_time": False,
         "inline": False,
         "buttons": [[
-            _button("🚨 Отправить жалобу", "complaint_reason_mode", "primary", {"listing_id": listing_id, "complaint_id": complaint_id}),
             _button("❌ Отмена", "cancel_complaint", "secondary", {"listing_id": listing_id, "complaint_id": complaint_id}),
         ]],
     }
