@@ -77,7 +77,7 @@ async def vk_callback(request: Request) -> str:
 
     try:
         if command in {"ban_user", "unban_user"}:
-            if user_id not in settings.administrators:
+            if not settings.can_manage_users(user_id):
                 await vk.send_message(user_id, "⛔ У вас нет прав для этого действия.")
                 return "ok"
             target_id = int(data.get("target_vk_user_id", 0) or 0)
@@ -107,7 +107,7 @@ async def vk_callback(request: Request) -> str:
             await vk.send_message(
                 user_id,
                 "Привет! Добро пожаловать в Барахолку VK.\n\nЗдесь можно подать объявление на модерацию.",
-                keyboard=main_keyboard(user_id in settings.administrators),
+                keyboard=main_keyboard(settings.role_for(user_id)),
             )
             return "ok"
 
@@ -135,7 +135,7 @@ async def vk_callback(request: Request) -> str:
         elif command == "cancel_complaint":
             reply, keyboard = await cancel_user_complaint(user, int(data.get("complaint_id", 0) or 0))
             if not keyboard:
-                keyboard = main_keyboard(user_id in settings.administrators)
+                keyboard = main_keyboard(settings.role_for(user_id))
         elif command == "main_menu":
             reply, keyboard = "🏠 Главное меню", main_keyboard(user_id in settings.administrators)
         elif command == "moderation_queue" or text == "🛡 Очередь модерации":
