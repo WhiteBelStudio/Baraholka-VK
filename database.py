@@ -109,6 +109,10 @@ CREATE TABLE IF NOT EXISTS search_sessions (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS filter_sessions (
+    vk_user_id INTEGER PRIMARY KEY,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
@@ -278,7 +282,7 @@ async def create_complaint(listing_id: int, reporter_user_id: int) -> int:
 
 
 async def get_pending_complaint(reporter_user_id: int) -> aiosqlite.Row | None:
-    return await fetch_one("SELECT * FROM complaints WHERE reporter_user_id = ? AND status = 'pending_reason' ORDER BY id DESC LIMIT 1", (reporter_user_id,))
+    return await fetch_one("SELECT * FROM complaints WHERE reporter_user_id = ? AND status = 'pending_reason' ORDER BY id DESC LIMIT 1")
 
 
 async def finish_complaint(complaint_id: int, reporter_user_id: int, reason: str) -> bool:
@@ -443,3 +447,23 @@ async def has_search_session(vk_user_id: int) -> bool:
 
 async def clear_search_session(vk_user_id: int) -> None:
     await execute("DELETE FROM search_sessions WHERE vk_user_id = ?", (vk_user_id,))
+
+
+async def set_filter_session(vk_user_id: int) -> None:
+    await execute(
+        "INSERT INTO filter_sessions (vk_user_id) VALUES (?) ON CONFLICT(vk_user_id) DO UPDATE SET created_at=CURRENT_TIMESTAMP",
+        (vk_user_id,),
+    )
+
+
+async def has_filter_session(vk_user_id: int) -> bool:
+    return await fetch_one("SELECT vk_user_id FROM filter_sessions WHERE vk_user_id = ?", (vk_user_id,)) is not None
+
+
+async def clear_filter_session(vk_user_id: int) -> None:
+    await execute("DELETE FROM filter_sessions WHERE vk_user_id = ?", (vk_user_id,))
+
+
+async def get_filter_sessions_count() -> int:
+    row = await fetch_one("SELECT COUNT(*) AS count FROM filter_sessions")
+    return int(row["count"]) if row else 0
