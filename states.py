@@ -13,7 +13,7 @@ class ListingState(str, Enum):
 
 FIELD_PROMPTS = {
     ListingState.TITLE: "📝 Введите название товара.\n\nНапример: «Набор комплектующих»",
-    ListingState.CATEGORY: "🏷 Введите категорию товара вручную.",
+    ListingState.CATEGORY: "🏷 Введите категорию товара вручную.\n\nНапример: «Электроника», «Одежда», «Инструменты».\nКатегория не выбирается из готового списка — её указывает продавец.",
     ListingState.DESCRIPTION: "📄 Введите описание товара.",
     ListingState.PRICE: "💰 Введите цену товара.",
     ListingState.CITY: "📍 Введите город.",
