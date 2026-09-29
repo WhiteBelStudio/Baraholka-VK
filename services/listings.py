@@ -38,6 +38,7 @@ class ListingValidationError(ListingError):
 class ListingStatus:
     DRAFT = "draft"
     MODERATION = "moderation"
+    PUBLISHING = "publishing"
     APPROVED = "approved"
     REJECTED = "rejected"
     PUBLISHED = "published"
@@ -48,6 +49,7 @@ class ListingStatus:
 ALLOWED_STATUSES = {
     ListingStatus.DRAFT,
     ListingStatus.MODERATION,
+    ListingStatus.PUBLISHING,
     ListingStatus.APPROVED,
     ListingStatus.REJECTED,
     ListingStatus.PUBLISHED,
