@@ -119,3 +119,41 @@ def archived_listing_keyboard(listing_id: int) -> dict[str, Any]:
             "color": "positive",
         }]],
     }
+
+
+
+def admin_keyboard(role: str | None = None) -> dict[str, Any]:
+    buttons: list[list[dict[str, Any]]] = []
+    if role in {"owner", "moderator"}:
+        buttons.append([{
+            "action": {"type": "text", "label": "🛡 Очередь модерации", "payload": json.dumps({"command": "moderation_queue"}, ensure_ascii=False)},
+            "color": "primary",
+        }])
+    if role in {"owner", "moderator", "support"}:
+        buttons.append([{
+            "action": {"type": "text", "label": "🚨 Жалобы", "payload": json.dumps({"command": "complaints_queue"}, ensure_ascii=False)},
+            "color": "secondary",
+        }])
+        buttons.append([{
+            "action": {"type": "text", "label": "📊 Статистика", "payload": json.dumps({"command": "statistics"}, ensure_ascii=False)},
+            "color": "secondary",
+        }])
+    if role in {"owner", "moderator"}:
+        buttons.append([{
+            "action": {"type": "text", "label": "🗄 Архив", "payload": json.dumps({"command": "archive"}, ensure_ascii=False)},
+            "color": "secondary",
+        }])
+    if role == "owner":
+        buttons.append([{
+            "action": {"type": "text", "label": "👥 Управление пользователями", "payload": json.dumps({"command": "user_management"}, ensure_ascii=False)},
+            "color": "secondary",
+        }])
+        buttons.append([{
+            "action": {"type": "text", "label": "🛡 Управление ролями", "payload": json.dumps({"command": "role_management"}, ensure_ascii=False)},
+            "color": "secondary",
+        }])
+    buttons.append([{
+        "action": {"type": "text", "label": "🏠 Главное меню", "payload": json.dumps({"command": "main_menu"}, ensure_ascii=False)},
+        "color": "secondary",
+    }])
+    return {"one_time": False, "inline": True, "buttons": buttons}
