@@ -38,7 +38,7 @@ from services.search import (
 from services.statistics import format_statistics, get_statistics
 from services.vk import VKClient, VKAPIError
 from services.telegram_bot import run_telegram_bot
-from services.telegram_storage import set_vk_broadcast_subscription
+from services.telegram_storage import init_telegram_storage, set_vk_broadcast_subscription
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="Baraholka VK", version="0.5.3")
@@ -323,6 +323,7 @@ telegram_task: asyncio.Task | None = None
 async def startup_event() -> None:
     global cleanup_task, telegram_task
     await init_db()
+    await init_telegram_storage()
     cleanup_task = asyncio.create_task(cleanup_loop())
     if settings.telegram_bot_token.strip():
         telegram_task = asyncio.create_task(run_telegram_bot())
