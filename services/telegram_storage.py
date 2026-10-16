@@ -17,6 +17,12 @@ async def init_telegram_storage() -> None:
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS vk_broadcast_subscribers (
+                vk_user_id INTEGER PRIMARY KEY,
+                is_subscribed INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             CREATE TABLE IF NOT EXISTS broadcast_campaigns (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 created_by_telegram_id INTEGER NOT NULL,
@@ -43,6 +49,8 @@ async def init_telegram_storage() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_tg_subscribers_active
                 ON telegram_subscribers(is_subscribed, telegram_user_id);
+            CREATE INDEX IF NOT EXISTS idx_vk_subscribers_active
+                ON vk_broadcast_subscribers(is_subscribed, vk_user_id);
             CREATE INDEX IF NOT EXISTS idx_broadcast_campaigns_created
                 ON broadcast_campaigns(created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_broadcast_deliveries_campaign
@@ -134,3 +142,21 @@ async def finish_campaign(campaign_id: int, sent_count: int, failed_count: int) 
         WHERE id=? AND status='sending'""",
         (sent_count, failed_count, campaign_id),
     )
+
+
+async def set_vk_broadcast_subscription(vk_user_id: int, subscribed: bool) -> None:
+    if subscribed:
+        await execute(
+            """INSERT INTO vk_broadcast_subscribers (vk_user_id, is_subscribed)
+            VALUES (?, 1)
+            ON CONFLICT(vk_user_id) DO UPDATE SET
+                is_subscribed=1, updated_at=CURRENT_TIMESTAMP""",
+            (vk_user_id,),
+        )
+    else:
+        await execute(
+            """UPDATE vk_broadcast_subscribers
+            SET is_subscribed=0, updated_at=CURRENT_TIMESTAMP
+            WHERE vk_user_id=?""",
+            (vk_user_id,),
+        )
