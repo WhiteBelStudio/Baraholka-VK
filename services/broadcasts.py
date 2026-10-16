@@ -6,7 +6,6 @@ import logging
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError, TelegramForbiddenError, TelegramRetryAfter
 
-from config import settings
 from database import fetch_all
 from services.telegram_storage import (
     create_campaign,
@@ -37,7 +36,11 @@ async def send_campaign(
     campaign_id = await create_campaign(creator_id, campaign_type, message_text)
     telegram_targets = await get_active_telegram_subscribers()
     vk_targets = await fetch_all(
-        "SELECT vk_user_id FROM users WHERE is_blocked=0 AND vk_user_id > 0 ORDER BY vk_user_id"
+        """SELECT s.vk_user_id
+        FROM vk_broadcast_subscribers s
+        JOIN users u ON u.vk_user_id=s.vk_user_id
+        WHERE s.is_subscribed=1 AND u.is_blocked=0
+        ORDER BY s.vk_user_id"""
     )
     total_targets = len(telegram_targets) + len(vk_targets)
     await mark_campaign_started(campaign_id, total_targets)
@@ -49,7 +52,7 @@ async def send_campaign(
     for target in telegram_targets:
         recipient_id = int(target["telegram_user_id"])
         try:
-            await bot.send_message(recipient_id, message_text)
+            await bot.send_message(recipient_id, __import__('html').escape(message_text))
             await record_delivery(campaign_id, "telegram", recipient_id, "sent")
             sent += 1
         except TelegramRetryAfter as exc:
