@@ -55,6 +55,14 @@ async def init_telegram_schema() -> None:
             CREATE INDEX IF NOT EXISTS idx_telegram_users_subscribed
                 ON telegram_users(subscribed_to_news, is_blocked);
 
+            CREATE TABLE IF NOT EXISTS vk_news_subscriptions (
+                vk_user_id INTEGER PRIMARY KEY,
+                subscribed INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_vk_news_subscriptions_subscribed
+                ON vk_news_subscriptions(subscribed);
+
             CREATE TABLE IF NOT EXISTS broadcast_campaigns (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 created_by_telegram_id INTEGER NOT NULL,
@@ -313,3 +321,31 @@ async def get_telegram_statistics() -> dict[str, int]:
             "SELECT COUNT(*) FROM telegram_listings WHERE status = 'moderation'"
         )).fetchone()
         return {"users": int(users[0]), "subscribed": int(subscribed[0]), "pending": int(pending[0])}
+
+
+async def set_vk_news_subscription(vk_user_id: int, enabled: bool) -> None:
+    async with await _connect() as db:
+        await db.execute(
+            """
+            INSERT INTO vk_news_subscriptions (vk_user_id, subscribed)
+            VALUES (?, ?)
+            ON CONFLICT(vk_user_id) DO UPDATE SET
+                subscribed = excluded.subscribed,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (vk_user_id, int(enabled)),
+        )
+        await db.commit()
+
+
+async def get_vk_broadcast_recipients() -> list[int]:
+    async with await _connect() as db:
+        cursor = await db.execute(
+            """
+            SELECT s.vk_user_id
+            FROM vk_news_subscriptions s
+            JOIN users u ON u.vk_user_id = s.vk_user_id
+            WHERE s.subscribed = 1 AND u.is_blocked = 0
+            """
+        )
+        return [int(row[0]) for row in await cursor.fetchall()]
