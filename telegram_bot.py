@@ -613,17 +613,56 @@ async def broadcast_message_handler(message: Message, state: FSMContext) -> None
 
 
 @router.callback_query(F.data.startswith("sc:bplatform:"))
-async def broadcast_send_handler(callback: CallbackQuery, bot: Bot) -> None:
+async def broadcast_send_handler(callback: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     if not callback.from_user or not settings.telegram_can_moderate(callback.from_user.id):
         await callback.answer("Нет доступа", show_alert=True)
         return
     platform = callback.data.rsplit(":", 1)[-1]
-    data = await callback.message.bot.get_updates() if False else None
-    # Broadcast state is held by the FSM for the administrator; resolve it via the dispatcher context.
-    await callback.answer("Рассылка запускается…")
+    data = await state.get_data()
+    text = str(data.get("broadcast_text") or "").strip()
+    message_type = str(data.get("broadcast_type") or "news")
+    if not text:
+        await callback.answer("Текст рассылки не найден. Создайте её заново.", show_alert=True)
+        await state.clear()
+        return
+    if platform not in {"telegram", "vk", "both"}:
+        await callback.answer("Неизвестная платформа", show_alert=True)
+        return
+    await callback.answer("Запускаю рассылку…")
+    campaign_id = await create_broadcast_campaign(callback.from_user.id, message_type, text, platform)
+    sent_count = 0
+    failed_count = 0
+    prefix = {"important": "🚨 ВАЖНАЯ НОВОСТЬ", "news": "📣 НОВОСТИ БАРАХОЛКИ", "listing": "🛍 НОВОСТЬ О ТОВАРЕ"}.get(message_type, "📣 НОВОСТИ БАРАХОЛКИ")
+    payload = f"{prefix}\\n\\n{text}\\n\\n🦆 Скрудж Макдак"
+    if platform in {"telegram", "both"}:
+        recipients = await get_telegram_broadcast_recipients()
+        for recipient_id in recipients:
+            try:
+                await bot.send_message(recipient_id, payload)
+                await record_broadcast_delivery(campaign_id, "telegram", recipient_id, "sent")
+                sent_count += 1
+            except TelegramAPIError as exc:
+                await record_broadcast_delivery(campaign_id, "telegram", recipient_id, "failed", str(exc))
+                failed_count += 1
+            await asyncio.sleep(0.04)
+    if platform in {"vk", "both"}:
+        recipients = await fetch_all("SELECT vk_user_id FROM users WHERE is_blocked = 0")
+        vk = VKClient()
+        for row in recipients:
+            recipient_id = int(row["vk_user_id"])
+            try:
+                await vk.send_message(recipient_id, payload)
+                await record_broadcast_delivery(campaign_id, "vk", recipient_id, "sent")
+                sent_count += 1
+            except Exception as exc:
+                await record_broadcast_delivery(campaign_id, "vk", recipient_id, "failed", str(exc))
+                failed_count += 1
+            await asyncio.sleep(0.04)
+    await finish_broadcast_campaign(campaign_id, sent_count, failed_count)
+    await state.clear()
     await callback.message.answer(
-        "Для безопасного запуска рассылки отправьте /admin и выберите «📣 Создать рассылку» заново. "
-        "Перед отправкой бот должен получить текст из вашего активного диалога."
+        f"✅ Рассылка №{campaign_id} завершена.\\n📨 Доставлено: {sent_count}\\n⚠️ Ошибок доставки: {failed_count}",
+        reply_markup=main_keyboard(callback.from_user.id),
     )
 
 
