@@ -129,7 +129,7 @@ async def receive_campaign_text(message: Message, state: FSMContext) -> None:
         f"👀 <b>Предпросмотр рассылки</b>\n"
         f"Тип: {CAMPAIGN_LABELS[campaign_type]}\n"
         "Аудитория: подписчики Telegram-бота и активные пользователи VK-бота.\n\n"
-        f"{content}\n\n"
+        f"{escape(content)}\n\n"
         "Запустить отправку?",
         reply_markup=_confirm_keyboard(),
     )
