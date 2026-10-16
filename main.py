@@ -37,6 +37,7 @@ from services.search import (
 )
 from services.statistics import format_statistics, get_statistics
 from services.vk import VKClient, VKAPIError
+from telegram_bot import start_telegram_bot
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="Baraholka VK", version="0.5.3")
@@ -304,26 +305,36 @@ async def vk_callback(request: Request) -> str:
 
 
 cleanup_task: asyncio.Task | None = None
+telegram_task: asyncio.Task | None = None
 
 
 @app.on_event("startup")
 async def startup_event() -> None:
-    global cleanup_task
+    global cleanup_task, telegram_task
     await init_db()
     cleanup_task = asyncio.create_task(cleanup_loop())
+    if settings.telegram_bot_token.strip():
+        telegram_task = asyncio.create_task(start_telegram_bot())
+        logger.info("Telegram marketplace bot scheduled")
+    else:
+        logger.info("Telegram marketplace bot disabled: TELEGRAM_BOT_TOKEN is empty")
     logger.info("Baraholka VK Callback API initialized")
 
 
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
-    global cleanup_task
-    if cleanup_task is not None:
-        cleanup_task.cancel()
-        try:
-            await cleanup_task
-        except asyncio.CancelledError:
-            pass
-        cleanup_task = None
+    global cleanup_task, telegram_task
+    for task in (cleanup_task, telegram_task):
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                logger.exception("Background task stopped with an error during shutdown")
+    cleanup_task = None
+    telegram_task = None
 
 
 if __name__ == "__main__":
