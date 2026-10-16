@@ -38,6 +38,7 @@ from services.search import (
 from services.statistics import format_statistics, get_statistics
 from services.vk import VKClient, VKAPIError
 from telegram_bot import start_telegram_bot
+from telegram_store import init_telegram_schema, set_vk_news_subscription
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="Baraholka VK", version="0.5.3")
@@ -130,6 +131,17 @@ async def vk_callback(request: Request) -> str:
         current_user = await get_user_by_vk_id(user_id)
         if current_user and current_user["is_blocked"]:
             await vk.send_message(user_id, "Ваш аккаунт заблокирован и не может использовать барахолку.")
+            return "ok"
+
+        if command in {"news_subscribe", "news_unsubscribe"}:
+            enabled = command == "news_subscribe"
+            await set_vk_news_subscription(user_id, enabled)
+            message_text = (
+                "🔔 Вы подписались на новости «Скрудж Макдак»."
+                if enabled
+                else "🔕 Рассылка новостей отключена. Вы можете подписаться снова в главном меню."
+            )
+            await vk.send_message(user_id, message_text, keyboard=main_keyboard(settings.role_for(user_id)))
             return "ok"
 
         if command == "search":
@@ -312,6 +324,7 @@ telegram_task: asyncio.Task | None = None
 async def startup_event() -> None:
     global cleanup_task, telegram_task
     await init_db()
+    await init_telegram_schema()
     cleanup_task = asyncio.create_task(cleanup_loop())
     if settings.telegram_bot_token.strip():
         telegram_task = asyncio.create_task(start_telegram_bot())
