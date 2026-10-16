@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from html import escape
 import logging
 
 from aiogram import Bot
@@ -52,7 +53,7 @@ async def send_campaign(
     for target in telegram_targets:
         recipient_id = int(target["telegram_user_id"])
         try:
-            await bot.send_message(recipient_id, __import__('html').escape(message_text))
+            await bot.send_message(recipient_id, escape(message_text))
             await record_delivery(campaign_id, "telegram", recipient_id, "sent")
             sent += 1
         except TelegramRetryAfter as exc:
