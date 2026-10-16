@@ -13,6 +13,12 @@ class Settings(BaseSettings):
     vk_callback_secret: str = ""
     vk_confirmation_token: str = ""
 
+    # Telegram is optional for backwards-compatible VK-only deployments.
+    telegram_bot_token: str = ""
+    telegram_channel_id: str = ""
+    telegram_admin_ids: str = ""
+    telegram_moderator_ids: str = ""
+
     host: str = "0.0.0.0"
     port: int = Field(default=8000, ge=1, le=65535)
 
@@ -67,6 +73,21 @@ class Settings(BaseSettings):
     @property
     def support(self) -> set[int]:
         return self._parse_ids(self.support_ids)
+
+    @property
+    def telegram_owners(self) -> set[int]:
+        return self._parse_ids(self.telegram_admin_ids)
+
+    @property
+    def telegram_moderators(self) -> set[int]:
+        return self._parse_ids(self.telegram_moderator_ids)
+
+    @property
+    def telegram_administrators(self) -> set[int]:
+        return self.telegram_owners | self.telegram_moderators
+
+    def telegram_can_moderate(self, user_id: int) -> bool:
+        return user_id in self.telegram_administrators
 
     @property
     def administrators(self) -> set[int]:
