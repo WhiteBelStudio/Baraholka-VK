@@ -1,6 +1,6 @@
 # Baraholka VK
 
-VK community marketplace bot.
+Telegram + VK community marketplace bot for «Скрудж Макдак».
 
 ## Configuration
 
@@ -12,9 +12,24 @@ The application is configured through environment variables loaded from `.env`.
 4. Set `VK_CONFIRMATION_TOKEN` to the confirmation string configured for VK Callback API.
 5. Set `VK_CALLBACK_SECRET` when a callback secret is configured in VK.
 6. Add administrator VK user IDs to `ADMIN_IDS`, separated by commas.
-7. Adjust `HOST`, `PORT`, `DATABASE_PATH`, and `LOG_LEVEL` only if needed.
+7. To enable Telegram, set `TELEGRAM_BOT_TOKEN` and configure `TELEGRAM_ADMIN_IDS` / `TELEGRAM_MODERATOR_IDS` with Telegram numeric user IDs.
+8. Adjust `HOST`, `PORT`, `DATABASE_PATH`, and `LOG_LEVEL` only if needed.
 
 Real credentials must stay in `.env`; the repository contains only `.env.example`.
+
+Telegram is optional during migration: without `TELEGRAM_BOT_TOKEN`, the existing VK service still starts. Configure the token to enable Telegram polling in the same process.
+
+## Broadcasts
+
+- Telegram users subscribe by sending `/start` and can opt out with `/stop`.
+- VK users explicitly subscribe with `/subscribe` and opt out with `/unsubscribe`.
+- A Telegram administrator opens `/admin`, chooses a campaign type, enters the text, reviews the preview, and confirms before delivery.
+- Campaigns and per-recipient delivery results are recorded in SQLite.
+
+## Project documentation
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
 
 ## Run
 
