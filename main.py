@@ -38,6 +38,7 @@ from services.search import (
 from services.statistics import format_statistics, get_statistics
 from services.vk import VKClient, VKAPIError
 from services.telegram_bot import run_telegram_bot
+from services.telegram_storage import set_vk_broadcast_subscription
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="Baraholka VK", version="0.5.3")
@@ -130,6 +131,16 @@ async def vk_callback(request: Request) -> str:
         current_user = await get_user_by_vk_id(user_id)
         if current_user and current_user["is_blocked"]:
             await vk.send_message(user_id, "Ваш аккаунт заблокирован и не может использовать барахолку.")
+            return "ok"
+
+        if text.lower() in {"/subscribe", "подписаться на новости"}:
+            await set_vk_broadcast_subscription(user_id, True)
+            await vk.send_message(user_id, "🔔 Вы подписались на новости барахолки. Отписаться можно командой /unsubscribe.")
+            return "ok"
+
+        if text.lower() in {"/unsubscribe", "отписаться от новостей"}:
+            await set_vk_broadcast_subscription(user_id, False)
+            await vk.send_message(user_id, "🔕 Вы отключили рассылки. Снова подписаться можно командой /subscribe.")
             return "ok"
 
         if command == "search":
