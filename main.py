@@ -37,6 +37,8 @@ from services.search import (
 )
 from services.statistics import format_statistics, get_statistics
 from services.vk import VKClient, VKAPIError
+from services.telegram_bot import run_telegram_bot
+from services.telegram_storage import init_telegram_storage, set_vk_broadcast_subscription
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="Baraholka VK", version="0.5.3")
@@ -129,6 +131,16 @@ async def vk_callback(request: Request) -> str:
         current_user = await get_user_by_vk_id(user_id)
         if current_user and current_user["is_blocked"]:
             await vk.send_message(user_id, "Ваш аккаунт заблокирован и не может использовать барахолку.")
+            return "ok"
+
+        if text.lower() in {"/subscribe", "подписаться на новости"}:
+            await set_vk_broadcast_subscription(user_id, True)
+            await vk.send_message(user_id, "🔔 Вы подписались на новости барахолки. Отписаться можно командой /unsubscribe.")
+            return "ok"
+
+        if text.lower() in {"/unsubscribe", "отписаться от новостей"}:
+            await set_vk_broadcast_subscription(user_id, False)
+            await vk.send_message(user_id, "🔕 Вы отключили рассылки. Снова подписаться можно командой /subscribe.")
             return "ok"
 
         if command == "search":
@@ -304,26 +316,34 @@ async def vk_callback(request: Request) -> str:
 
 
 cleanup_task: asyncio.Task | None = None
+telegram_task: asyncio.Task | None = None
 
 
 @app.on_event("startup")
 async def startup_event() -> None:
-    global cleanup_task
+    global cleanup_task, telegram_task
     await init_db()
+    await init_telegram_storage()
     cleanup_task = asyncio.create_task(cleanup_loop())
-    logger.info("Baraholka VK Callback API initialized")
+    if settings.telegram_bot_token.strip():
+        telegram_task = asyncio.create_task(run_telegram_bot())
+    logger.info("Scrooge McDuck marketplace API initialized")
 
 
 @app.on_event("shutdown")
 async def shutdown_event() -> None:
-    global cleanup_task
-    if cleanup_task is not None:
-        cleanup_task.cancel()
-        try:
-            await cleanup_task
-        except asyncio.CancelledError:
-            pass
-        cleanup_task = None
+    global cleanup_task, telegram_task
+    for task_name, task in (("cleanup", cleanup_task), ("telegram", telegram_task)):
+        if task is not None:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                logger.exception("Error while stopping %s task", task_name)
+    cleanup_task = None
+    telegram_task = None
 
 
 if __name__ == "__main__":
