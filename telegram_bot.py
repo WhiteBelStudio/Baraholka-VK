@@ -23,7 +23,6 @@ from aiogram.types import (
 
 from config import settings
 from database import (
-    add_moderation_log,
     execute,
     fetch_all,
     fetch_one,
@@ -49,6 +48,7 @@ from telegram_store import (
     finish_broadcast_campaign,
     finish_telegram_publication,
     get_telegram_broadcast_recipients,
+    get_vk_broadcast_recipients,
     get_telegram_listing,
     get_telegram_listings_by_status,
     get_telegram_statistics,
@@ -465,7 +465,6 @@ async def _publish_vk_listing(bot: Bot, listing_id: int, admin_id: int) -> str:
         logger.warning("VK publication failed for listing %s: %s", listing_id, exc)
         return "Не удалось опубликовать в VK. Объявление возвращено в очередь."
     await update_listing(listing_id, status="published", published_post_id=post_id)
-    await add_moderation_log(listing_id, admin_id, "approved")
     await log_cross_platform_action("telegram", admin_id, "listing_published", "vk", listing_id, f"post_id={post_id}")
     seller = await fetch_one("SELECT vk_user_id FROM users WHERE id = ?", (int(listing["user_id"]),))
     if seller:
@@ -558,7 +557,6 @@ async def reject_reason_handler(message: Message, state: FSMContext, bot: Bot) -
             if changed != 1:
                 result = "Объявление VK уже обработано другим администратором."
             else:
-                await add_moderation_log(listing_id, message.from_user.id, "rejected", reason)
                 await log_cross_platform_action("telegram", message.from_user.id, "listing_rejected", "vk", listing_id, reason)
                 seller = await fetch_one("SELECT vk_user_id FROM users WHERE id = ?", (int(listing["user_id"]),))
                 if seller:
@@ -646,10 +644,10 @@ async def broadcast_send_handler(callback: CallbackQuery, state: FSMContext, bot
                 failed_count += 1
             await asyncio.sleep(0.04)
     if platform in {"vk", "both"}:
-        recipients = await fetch_all("SELECT vk_user_id FROM users WHERE is_blocked = 0")
+        recipients = await get_vk_broadcast_recipients()
         vk = VKClient()
-        for row in recipients:
-            recipient_id = int(row["vk_user_id"])
+        for recipient_id in recipients:
+            recipient_id = int(recipient_id)
             try:
                 await vk.send_message(recipient_id, payload)
                 await record_broadcast_delivery(campaign_id, "vk", recipient_id, "sent")
