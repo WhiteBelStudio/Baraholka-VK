@@ -1,10 +1,18 @@
 from __future__ import annotations
+
 import json
 from typing import Any
 
 
 def _button(label: str, command: str, color: str = "primary") -> dict[str, Any]:
-    return {"action": {"type": "text", "label": label, "payload": json.dumps({"command": command}, ensure_ascii=False)}, "color": color}
+    return {
+        "action": {
+            "type": "text",
+            "label": label,
+            "payload": json.dumps({"command": command}, ensure_ascii=False),
+        },
+        "color": color,
+    }
 
 
 def main_keyboard(role: str | None = None) -> dict[str, Any]:
@@ -17,7 +25,9 @@ def main_keyboard(role: str | None = None) -> dict[str, Any]:
         [_button("🔔 Подписаться на новости", "news_subscribe", "secondary")],
         [_button("🔕 Отключить новости", "news_unsubscribe", "secondary")],
     ]
-    if role in {"owner", "moderator", "support"}:\n        buttons.append([_button("⚙️ Админ-панель", "admin_panel", "primary")])\n    if role in {"owner", "moderator"}:
+    if role in {"owner", "moderator", "support"}:
+        buttons.append([_button("⚙️ Админ-панель", "admin_panel", "primary")])
+    if role in {"owner", "moderator"}:
         buttons.append([_button("🛡 Очередь модерации", "moderation_queue", "secondary")])
         buttons.append([_button("🗄 Архив", "archive", "secondary")])
     return {"one_time": False, "inline": False, "buttons": buttons}
