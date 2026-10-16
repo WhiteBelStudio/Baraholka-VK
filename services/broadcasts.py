@@ -59,7 +59,7 @@ async def send_campaign(
         except TelegramRetryAfter as exc:
             await asyncio.sleep(float(exc.retry_after) + 0.5)
             try:
-                await bot.send_message(recipient_id, message_text)
+                await bot.send_message(recipient_id, escape(message_text))
                 await record_delivery(campaign_id, "telegram", recipient_id, "sent")
                 sent += 1
             except TelegramAPIError as retry_exc:
