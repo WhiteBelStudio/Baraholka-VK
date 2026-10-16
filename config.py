@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     vk_callback_secret: str = ""
     vk_confirmation_token: str = ""
 
+    telegram_bot_token: str = ""
+    telegram_admin_ids: str = ""
+    telegram_moderator_ids: str = ""
+    telegram_support_ids: str = ""
+
     host: str = "0.0.0.0"
     port: int = Field(default=8000, ge=1, le=65535)
 
@@ -72,6 +77,18 @@ class Settings(BaseSettings):
     def administrators(self) -> set[int]:
         return self.owners | self.moderators | self.support
 
+    @property
+    def telegram_owners(self) -> set[int]:
+        return self._parse_ids(self.telegram_admin_ids)
+
+    @property
+    def telegram_moderators(self) -> set[int]:
+        return self._parse_ids(self.telegram_moderator_ids)
+
+    @property
+    def telegram_support(self) -> set[int]:
+        return self._parse_ids(self.telegram_support_ids)
+
     def role_for(self, user_id: int) -> str | None:
         if user_id in self.owners:
             return "owner"
@@ -81,8 +98,20 @@ class Settings(BaseSettings):
             return "support"
         return None
 
+    def role_for_telegram(self, user_id: int) -> str | None:
+        if user_id in self.telegram_owners:
+            return "owner"
+        if user_id in self.telegram_moderators:
+            return "moderator"
+        if user_id in self.telegram_support:
+            return "support"
+        return None
+
     def can_moderate(self, user_id: int) -> bool:
         return user_id in self.owners or user_id in self.moderators
+
+    def can_moderate_telegram(self, user_id: int) -> bool:
+        return user_id in self.telegram_owners or user_id in self.telegram_moderators
 
     def can_manage_users(self, user_id: int) -> bool:
         return user_id in self.owners
