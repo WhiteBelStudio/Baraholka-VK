@@ -14,6 +14,8 @@ def main_keyboard(role: str | None = None) -> dict[str, Any]:
         [_button("📋 Правила", "rules", "secondary")],
         [_button("🔎 Поиск объявлений", "search", "secondary")],
         [_button("⚙️ Фильтры", "filter", "secondary")],
+        [_button("🔔 Подписаться на новости", "news_subscribe", "secondary")],
+        [_button("🔕 Отключить новости", "news_unsubscribe", "secondary")],
     ]
     if role in {"owner", "moderator", "support"}:\n        buttons.append([_button("⚙️ Админ-панель", "admin_panel", "primary")])\n    if role in {"owner", "moderator"}:
         buttons.append([_button("🛡 Очередь модерации", "moderation_queue", "secondary")])
