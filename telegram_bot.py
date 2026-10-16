@@ -631,7 +631,7 @@ async def broadcast_send_handler(callback: CallbackQuery, state: FSMContext, bot
     sent_count = 0
     failed_count = 0
     prefix = {"important": "🚨 ВАЖНАЯ НОВОСТЬ", "news": "📣 НОВОСТИ БАРАХОЛКИ", "listing": "🛍 НОВОСТЬ О ТОВАРЕ"}.get(message_type, "📣 НОВОСТИ БАРАХОЛКИ")
-    payload = f"{prefix}\\n\\n{text}\\n\\n🦆 Скрудж Макдак"
+    payload = f"{prefix}\n\n{text}\n\n🦆 Скрудж Макдак"
     if platform in {"telegram", "both"}:
         recipients = await get_telegram_broadcast_recipients()
         for recipient_id in recipients:
@@ -659,7 +659,7 @@ async def broadcast_send_handler(callback: CallbackQuery, state: FSMContext, bot
     await finish_broadcast_campaign(campaign_id, sent_count, failed_count)
     await state.clear()
     await callback.message.answer(
-        f"✅ Рассылка №{campaign_id} завершена.\\n📨 Доставлено: {sent_count}\\n⚠️ Ошибок доставки: {failed_count}",
+        f"✅ Рассылка №{campaign_id} завершена.\n📨 Доставлено: {sent_count}\n⚠️ Ошибок доставки: {failed_count}",
         reply_markup=main_keyboard(callback.from_user.id),
     )
 
